@@ -1,33 +1,32 @@
 @echo off
-chcp 65001 >nul
 cd /d "%~dp0"
-echo === ZLZ-translator (Gemini-version): อัปเดตเป็นเวอร์ชันล่าสุด ===
+echo === ZLZ-translator (Gemini-version): Update to Latest ===
 echo.
 
 if exist ".git" (
   where git >nul 2>nul || (
-    echo ไม่พบ git ในเครื่อง  ให้โหลด zip ใหม่จาก GitHub ^(Code ^> Download ZIP^) มาแตกทับแทน
+    echo Git not found on system. Please download the latest ZIP from GitHub and overwrite files.
     pause & exit /b 1
   )
-  echo กำลังดึงโค้ดล่าสุดจาก GitHub...
+  echo Pulling latest code from GitHub...
   git pull --ff-only || (
-    echo ดึงโค้ดไม่สำเร็จ  ถ้าเคยแก้ไฟล์เอง ให้เก็บสำเนาไว้แล้วโหลด zip ใหม่มาแตกทับ
+    echo Git pull failed. If you modified files locally, backup your changes and download ZIP.
     pause & exit /b 1
   )
 ) else (
-  echo โฟลเดอร์นี้ไม่ได้มาจาก git clone  ให้โหลด zip ใหม่จาก GitHub มาแตกทับโฟลเดอร์นี้
-  echo ^(ไฟล์ .env และ glossary.md ของคุณจะไม่ถูกทับ เพราะไม่อยู่ใน zip^)
+  echo This folder was not cloned with Git. Please download latest ZIP from GitHub and extract here.
+  echo (Your .env and glossary.md will not be overwritten)
   pause & exit /b 0
 )
 
 if not exist ".venv\Scripts\python.exe" (
-  echo ยังไม่เคยติดตั้ง  กำลังเรียก setup.bat...
+  echo Environment not found. Running setup.bat...
   call setup.bat
   exit /b
 )
-echo กำลังอัปเดตไลบรารี...
+echo Updating packages...
 ".venv\Scripts\python.exe" -m pip install --quiet -r requirements.txt
 
 echo.
-echo อัปเดตเสร็จแล้ว  ถ้าโปรแกรมเปิดอยู่ ให้คลิกขวาไอคอน tray เลือก "ออกจากโปรแกรม" แล้วเปิด run_hotkey.bat ใหม่
+echo Update complete! If the program is currently running, right-click the tray icon, choose Exit, and restart run_hotkey.bat.
 pause

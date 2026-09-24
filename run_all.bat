@@ -1,5 +1,4 @@
 @echo off
 cd /d "%~dp0"
-rem เปิดโปรแกรม Hotkey (ไป tray) ซึ่งจะเปิด Discord app ให้เองถ้ามี DISCORD_TOKEN ใน .env
-rem หน้าต่างนี้จะปิดตัวเองทันที โปรแกรมทำงานอยู่เบื้องหลัง ปิดได้ที่เมนูไอคอน tray
+rem Launch hotkey app (system tray). Discord bot will launch automatically if DISCORD_TOKEN is set in .env.
 call run_hotkey.bat
