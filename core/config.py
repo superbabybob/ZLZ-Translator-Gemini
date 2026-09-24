@@ -9,10 +9,10 @@ from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-MODEL_ALIASES = {
-    "haiku": "claude-haiku-4-5",
-    "sonnet": "claude-sonnet-5",
-    "opus": "claude-opus-5",
+GEMINI_MODELS = {
+    "flash": "gemini-3.6-flash",
+    "pro": "gemini-2.5-pro",
+    "flash-lite": "gemini-3.5-flash-lite",
 }
 
 TONES = ("formal", "friendly", "brief")
@@ -34,7 +34,7 @@ class Config:
 
     @property
     def provider_order(self) -> list[str]:
-        order = self.raw.get("general", {}).get("provider_order") or ["claude_code"]
+        order = self.raw.get("general", {}).get("provider_order") or ["gemini"]
         return [str(p) for p in order]
 
     @property
@@ -46,8 +46,9 @@ class Config:
         return bool(self.raw.get("general", {}).get("auto_back_translate", True))
 
     def model_for(self, mode: str) -> str:
-        """ชื่อรุ่นโมเดล (ชื่อย่อ) สำหรับโหมดนั้น"""
-        return str(self.raw.get("modes", {}).get(mode, "sonnet"))
+        """ชื่อรุ่นโมเดลสำหรับโหมดนั้น"""
+        model = str(self.raw.get("modes", {}).get(mode, "gemini-3.6-flash"))
+        return GEMINI_MODELS.get(model, model)
 
     def provider_cfg(self, name: str) -> dict[str, Any]:
         return dict(self.raw.get("providers", {}).get(name, {}))

@@ -6,10 +6,8 @@
 # น้ำเสียงเริ่มต้นตอนแปลไทย -> อังกฤษ : formal | friendly | brief
 default_tone = "friendly"
 
-# ลำดับผู้ให้บริการ ตัวแรกคือหลัก ถ้าล้มเหลวจะลองตัวถัดไปตามลำดับ
-# ตัวเลือก: claude_code | gemini | anthropic | ollama
-# ตั้ง gemini ไว้ก่อนเพราะเร็วกว่า ถ้ายังไม่ได้ใส่ GEMINI_API_KEY จะข้ามไปใช้ claude_code ให้เอง
-provider_order = ["gemini", "claude_code"]
+# ผู้ให้บริการ: gemini (Google Gemini API มีโควต้าฟรี)
+provider_order = ["gemini"]
 
 # เวลารอสูงสุดต่อการแปลหนึ่งครั้ง (วินาที)
 timeout_seconds = 60
@@ -18,37 +16,20 @@ timeout_seconds = 60
 auto_back_translate = true
 
 [modes]
-# รุ่นโมเดลต่อโหมด (ใช้กับ claude_code และ anthropic)
-# ใช้ชื่อย่อได้: haiku (เร็ว/ถูก) | sonnet (สมดุล) | opus (ดีที่สุด)
-read    = "sonnet"   # อังกฤษ -> ไทย (haiku ช้าและเพี้ยนกว่า sonnet จากการวัดจริง)
-reply   = "sonnet"   # ไทย -> อังกฤษ
-explain = "sonnet"   # อธิบายว่าลูกค้าหมายถึงอะไร
-polish  = "sonnet"   # ขัดเกลาอังกฤษที่พิมพ์เอง
+# รุ่นโมเดลต่อโหมด (ใช้โมเดล Gemini)
+# แนะนำ:
+#   - gemini-3.6-flash      : เร็วมากและแม่นยำสูง (แนะนำสำหรับแปลทั่วไป)
+#   - gemini-3.5-flash-lite : เร็วที่สุด ประหยัด token
+read    = "gemini-3.6-flash"   # อังกฤษ -> ไทย
+reply   = "gemini-3.6-flash"   # ไทย -> อังกฤษ
+explain = "gemini-3.6-flash"   # อธิบายว่าลูกค้าหมายถึงอะไร
+polish  = "gemini-3.6-flash"   # ขัดเกลาอังกฤษที่พิมพ์เอง
 
 # ------------------------------------------------------------
-[providers.claude_code]
-# เว้นว่าง = หาให้อัตโนมัติ (claude ใน PATH หรือไบนารีที่มากับแอป Claude Desktop)
-# หรือระบุพาธเอง เช่น "C:/Users/Boss/AppData/Roaming/Claude/claude-code/2.1.280/claude.exe"
-command = ""
-# ระดับความคิด low ทำให้ตอบไวและประหยัดโควต้า
-effort = "low"
-# ตัดการโหลด MCP/ปลั๊กอิน/Chrome ตอนเริ่มโปรเซส ลดเวลาได้ราว 2-3 วินาทีต่อครั้ง
-fast_start = true
-# อาร์กิวเมนต์เพิ่มเติม ถ้าต้องการ
-extra_args = []
-
 [providers.gemini]
 # ใส่คีย์ในไฟล์ .env ชื่อ GEMINI_API_KEY
-model = "gemini-3.5-flash-lite"   # เร็วสุดจากการวัด (~1 วินาที) รุ่น 2.5 ปิดรับผู้ใช้ใหม่แล้ว ทางเลือก: gemini-3.6-flash (แม่นกว่า ช้ากว่า)
-
-[providers.anthropic]
-# ใส่คีย์ในไฟล์ .env ชื่อ ANTHROPIC_API_KEY (ใช้เครดิต API แยกจากโควต้าสมาชิก)
-# ชื่อย่อ haiku/sonnet/opus ใน [modes] จะถูกแปลงเป็นรุ่นจริงให้
-# haiku -> claude-haiku-4-5, sonnet -> claude-sonnet-5, opus -> claude-opus-5
-
-[providers.ollama]
-host = "http://localhost:11434"
-model = "qwen2.5:7b"
+# ขอคีย์ฟรีได้ที่ https://aistudio.google.com/apikey
+model = "gemini-3.6-flash"
 
 # ------------------------------------------------------------
 [hotkeys]
@@ -59,13 +40,13 @@ explain = "shift+f8"     # ลากคลุม -> อธิบายว่า�
 polish  = "shift+f9"     # อังกฤษที่พิมพ์เองในช่องแชท -> แก้ให้ถูกและเป็นธรรมชาติ
 
 # ให้ปุ่มลัดทำงานเฉพาะเมื่อหน้าต่างที่เปิดอยู่มีคำเหล่านี้ในชื่อ (ว่าง = ทุกโปรแกรม)
-# เช่น ["Discord"] จะไม่รบกวนตอนใช้ Unity หรือ Visual Studio ที่ใช้ F8/F9 อยู่แล้ว
+# เช่น ["Discord"] จะไม่รบกวนตอนใช้โปรแกรมอื่นที่ใช้ F8/F9 อยู่แล้ว
 only_in_apps = []
 
 [discord]
 # เปิด Discord app อัตโนมัติพร้อมโปรแกรม Hotkey (ต้องมี DISCORD_TOKEN ใน .env)
 # เปิด/ปิดระหว่างใช้งานได้ที่เมนูไอคอน tray
-autostart = true
+autostart = false
 
 [ui]
 # ขนาดตัวอักษรในป๊อปอัป

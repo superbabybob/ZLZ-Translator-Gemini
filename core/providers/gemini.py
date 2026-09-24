@@ -15,7 +15,7 @@ class GeminiProvider(Provider):
 
     def __init__(self, config):
         super().__init__(config)
-        self.model = str(self.cfg.get("model", "gemini-2.5-flash"))
+        self.model = str(self.cfg.get("model", "gemini-3.6-flash"))
         self.api_key = config.secret("GEMINI_API_KEY")
 
     def available(self) -> bool:
@@ -24,13 +24,14 @@ class GeminiProvider(Provider):
     def complete(self, system: str, user: str, model_alias: str) -> str:
         if not self.api_key:
             raise ProviderError("ยังไม่ได้ใส่ GEMINI_API_KEY ในไฟล์ .env")
+        model = model_alias or self.model
         body = {
             "system_instruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": user}]}],
             "generationConfig": {"temperature": 0.3},
         }
         req = urllib.request.Request(
-            _ENDPOINT.format(model=self.model),
+            _ENDPOINT.format(model=model),
             data=json.dumps(body).encode("utf-8"),
             headers={"Content-Type": "application/json", "x-goog-api-key": self.api_key},
             method="POST",

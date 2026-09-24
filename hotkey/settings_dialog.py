@@ -41,7 +41,7 @@ class SettingsDialog:
         small = ("Segoe UI", 9)
 
         win = self.win = tk.Toplevel(root)
-        win.title("Discord Translator: ตั้งค่าคีย์และบัญชี")
+        win.title("ZLZ-translator (Gemini-version): ตั้งค่าคีย์และบัญชี")
         win.configure(bg=BG)
         win.attributes("-topmost", True)
         win.resizable(False, False)
@@ -65,16 +65,8 @@ class SettingsDialog:
         self.discord_var = tk.StringVar(value=cfg.env.get("DISCORD_TOKEN", ""))
         self._entry(body, "DISCORD_TOKEN", self.discord_var)
 
-        # ---------- Claude ----------
-        self._section(body, "3. Claude Code (ทางเลือก: ใช้แพ็กเกจ Claude Pro/Max ที่มีอยู่ เป็นตัวสำรอง)", font, top=14)
-        row = tk.Frame(body, bg=BG)
-        row.pack(anchor="w", fill="x")
-        self.claude_status = tk.Label(row, text="กำลังตรวจสถานะ...", bg=BG, fg=MUTED, font=small)
-        self.claude_status.pack(side="left")
-        self._button(row, "ล็อกอิน Claude Code", self._claude_login).pack(side="right")
-
         # ---------- ปุ่มลัด ----------
-        self._section(body, "4. ปุ่มลัด (ใช้ได้ทุกโปรแกรม ไม่ใช่แค่ Discord)", font, top=14)
+        self._section(body, "3. ปุ่มลัด (ใช้ได้ทุกโปรแกรม ไม่ใช่แค่ Discord)", font, top=14)
         tk.Label(body, text='กด "กดปุ่ม" แล้วกดปุ่มที่ต้องการบนคีย์บอร์ด เช่น F7 หรือ Ctrl+Shift+T  (พิมพ์เองก็ได้ เช่น ctrl+shift+t)',
                  bg=BG, fg=MUTED, font=small, justify="left", wraplength=520).pack(anchor="w")
         self.hotkey_vars: dict[str, tk.StringVar] = {}
@@ -88,7 +80,7 @@ class SettingsDialog:
                      font=("Consolas", 10), width=18).pack(side="left", ipady=3)
             self._button(row, "กดปุ่ม", lambda m=mode: self._capture_hotkey(m)).pack(side="left", padx=(6, 0))
         self.only_discord_var = tk.BooleanVar(value=any("discord" in a.lower() for a in cfg.only_in_apps))
-        tk.Checkbutton(body, text="ให้ปุ่มลัดทำงานเฉพาะตอนหน้าต่าง Discord เปิดอยู่ (กันชนกับ Unity / Visual Studio)",
+        tk.Checkbutton(body, text="ให้ปุ่มลัดทำงานเฉพาะตอนหน้าต่าง Discord เปิดอยู่ (กันชนกับโปรแกรมอื่น)",
                        variable=self.only_discord_var, bg=BG, fg=FG, selectcolor=PANEL, activebackground=BG,
                        activeforeground=FG, font=small, anchor="w").pack(anchor="w", pady=(4, 0))
 
@@ -107,7 +99,6 @@ class SettingsDialog:
         w, h = win.winfo_reqwidth(), win.winfo_reqheight()
         win.geometry(f"+{(sw - w) // 2}+{(sh - h) // 2}")
         win.focus_force()
-        threading.Thread(target=self._check_claude, daemon=True).start()
 
     # ---------------------------------------------------------------- widgets
     def _section(self, parent, text, font, top=0):
@@ -203,20 +194,6 @@ class SettingsDialog:
 
         threading.Thread(target=run, daemon=True).start()
 
-    def _check_claude(self) -> None:
-        from core.providers.claude_code import find_claude_command
-        cmd = find_claude_command(str(self.app.cfg.provider_cfg("claude_code").get("command", "")))
-        if not cmd:
-            text = "ยังไม่ได้ติดตั้ง Claude Code (ไม่จำเป็นถ้าใช้ Gemini)"
-        else:
-            try:
-                proc = subprocess.run([*cmd, "auth", "status"], capture_output=True, text=True, encoding="utf-8",
-                                      errors="replace", timeout=30, creationflags=0x08000000 if sys.platform == "win32" else 0)
-                text = "ล็อกอินแล้ว" if '"loggedIn": true' in proc.stdout else "ยังไม่ได้ล็อกอิน"
-            except (OSError, subprocess.TimeoutExpired):
-                text = "ตรวจสถานะไม่ได้"
-        self._ui(lambda: self.claude_status.configure(text="สถานะ: " + text))
-
     def _ui(self, fn) -> None:
         """เรียก fn บนเธรด tkinter (ผ่านคิวของแอปถ้ามี)"""
         def safe():
@@ -231,16 +208,6 @@ class SettingsDialog:
                 self.win.after(0, safe)
             except RuntimeError:
                 pass
-
-    def _claude_login(self) -> None:
-        from core.providers.claude_code import find_claude_command
-        cmd = find_claude_command(str(self.app.cfg.provider_cfg("claude_code").get("command", "")))
-        if not cmd:
-            webbrowser.open("https://claude.com/claude-code")
-            self.status.configure(text="ยังไม่มี Claude Code ในเครื่อง เปิดหน้าดาวน์โหลดให้แล้ว ติดตั้งเสร็จค่อยกดปุ่มนี้อีกครั้ง", fg="#c7d2fe")
-            return
-        subprocess.Popen([*cmd, "auth", "login", "--claudeai"], creationflags=0x08000000 if sys.platform == "win32" else 0)
-        self.status.configure(text="เปิดเบราว์เซอร์ให้ล็อกอินแล้ว กด Authorize ในเบราว์เซอร์ แล้วปิด-เปิดหน้าต่างนี้ใหม่เพื่อดูสถานะ", fg="#c7d2fe")
 
     def close(self) -> None:
         SettingsDialog._current = None

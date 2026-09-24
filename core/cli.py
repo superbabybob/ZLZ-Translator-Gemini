@@ -24,13 +24,9 @@ def _status(translator: Translator) -> int:
     print("ผู้ให้บริการ:")
     for name, cls in PROVIDERS.items():
         prov = cls(cfg)
-        ready = "พร้อม" if prov.available() else "ยังไม่พร้อม"
-        detail = ""
-        if name == "claude_code":
-            detail = " ".join(prov.command) if prov.command else "ไม่พบไบนารี"
-        elif hasattr(prov, "model"):
-            detail = f"model={prov.model}"
-        print(f"  - {name:12s} {ready:10s} {detail}")
+        ready = "พร้อม" if prov.available() else "ยังไม่พร้อม (ขาด GEMINI_API_KEY ใน .env)"
+        detail = f"model={prov.model}" if hasattr(prov, "model") else ""
+        print(f"  - {name:12s} {ready:15s} {detail}")
     used = translator.usage.today()
     print(f"ใช้งานวันนี้: {used if used else 'ยังไม่มี'}")
     return 0

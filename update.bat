@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0"
-echo === Discord Translator: อัปเดตเป็นเวอร์ชันล่าสุด ===
+echo === ZLZ-translator (Gemini-version): อัปเดตเป็นเวอร์ชันล่าสุด ===
 echo.
 
 if exist ".git" (

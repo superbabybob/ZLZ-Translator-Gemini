@@ -4,8 +4,7 @@ pyperclip>=1.8
 pystray>=0.19
 Pillow>=10
 
-# หน้ากาก Discord User App
+# หน้ากาก Discord User App (ถ้าใช้งาน)
 discord.py>=2.4
 
-# ตัวเลือก: ใช้ Claude API โดยตรง (provider "anthropic")
-# anthropic>=1.0
+# Gemini Provider ใช้ urllib ใน standard library จึงไม่ต้องติดตั้งไลบรารี AI เพิ่มเติม

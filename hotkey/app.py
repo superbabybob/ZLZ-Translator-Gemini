@@ -50,7 +50,7 @@ class App:
 
         self.root = tk.Tk()
         self.root.withdraw()
-        self.root.title("Discord Translator")
+        self.root.title("ZLZ-translator (Gemini-version)")
 
         self.tray = Tray(
             get_status=self._status_text,
@@ -341,6 +341,18 @@ class App:
             self._show_error(f"โหลดการตั้งค่าไม่ได้: {e}")
         self.tray.refresh()
 
+    def _open_settings(self) -> None:
+        SettingsDialog(self.root, self, on_saved=lambda: self._reload(quiet=True))
+
+    def _toggle_autostart(self) -> None:
+        if self._autostart_state:
+            ok, msg = autostart.disable()
+        else:
+            ok, msg = autostart.enable(self.cfg.root)
+        self._autostart_state = autostart.is_enabled()
+        self.toast(msg)
+        self.tray.refresh()
+
     def _hotkeys_text(self) -> str:
         labels = {"read": "แปล", "reply": "ตอบ", "explain": "อธิบาย", "polish": "แก้"}
         parts = [f"{(self.cfg.hotkey(m) or '-').upper()}={labels[m]}" for m in MODES if self.cfg.hotkey(m)]
@@ -361,8 +373,13 @@ class App:
         self.root.after(40, self._poll)
         if self.cfg.discord_autostart and self.cfg.secret("DISCORD_TOKEN"):
             self.root.after(500, self._start_discord)
-        hint = "  ".join(f"{self.cfg.hotkey(m)}={m}" for m in MODES if self.cfg.hotkey(m))
-        self.root.after(300, lambda: Toast(self.root, f"Discord Translator พร้อมใช้\n{hint}", seconds=4))
+        
+        # ถ้ายังไม่มี GEMINI_API_KEY ให้เด้งหน้าต่างตั้งค่าให้อัตโนมัติทันที
+        if not self.cfg.secret("GEMINI_API_KEY"):
+            self.root.after(400, self._open_settings)
+        else:
+            hint = "  ".join(f"{self.cfg.hotkey(m)}={m}" for m in MODES if self.cfg.hotkey(m))
+            self.root.after(300, lambda: Toast(self.root, f"ZLZ-translator (Gemini-version) พร้อมใช้\n{hint}", seconds=4))
         log.info("app started")
         try:
             self.root.mainloop()

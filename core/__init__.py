@@ -1,1 +1,1 @@
-"""แกนแปลของ discord-translator"""
+"""แกนแปลของ ZLZ-translator (Gemini-version)"""

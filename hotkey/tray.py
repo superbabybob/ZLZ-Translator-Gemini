@@ -72,7 +72,7 @@ class Tray:
         self._toggle_autostart = toggle_autostart
         self._icons = {"normal": _make_icon_image(_BLUE), "busy": _make_icon_image(_ORANGE), "off": _make_icon_image(_GRAY)}
         self._busy = False
-        self.icon = pystray.Icon("discord-translator", self._icons["normal"], "Discord Translator", menu=self._menu())
+        self.icon = pystray.Icon("zlz-translator", self._icons["normal"], "ZLZ-translator (Gemini-version)", menu=self._menu())
 
     def _menu(self) -> pystray.Menu:
         def tone_item(tone: str):
@@ -124,13 +124,13 @@ class Tray:
     def refresh_icon(self) -> None:
         if not self._get_enabled():
             self.icon.icon = self._icons["off"]
-            self.icon.title = "Discord Translator (ปิดอยู่)"
+            self.icon.title = "ZLZ-translator (Gemini-version) (ปิดอยู่)"
         elif self._busy:
             self.icon.icon = self._icons["busy"]
-            self.icon.title = "Discord Translator (กำลังแปล...)"
+            self.icon.title = "ZLZ-translator (Gemini-version) (กำลังแปล...)"
         else:
             self.icon.icon = self._icons["normal"]
-            self.icon.title = "Discord Translator"
+            self.icon.title = "ZLZ-translator (Gemini-version)"
 
     def refresh(self) -> None:
         self.refresh_icon()
