@@ -18,7 +18,7 @@ from logging.handlers import RotatingFileHandler
 import discord
 from discord import app_commands
 
-from core.config import load_config
+from core.config import load_config, set_active_provider
 from core.providers import ProviderError
 from core.translator import Result, Translator
 
@@ -38,6 +38,7 @@ class TranslatorBot(discord.Client):
     def __init__(self, translator: Translator):
         super().__init__(intents=discord.Intents.none())
         self.translator = translator
+        self._cfg_mtime: float = 0.0
         # ให้ทุกคำสั่งติดตั้งได้ทั้งแบบ user และ guild และใช้ได้ทั้งใน guild, DM, group DM
         self.tree = app_commands.CommandTree(
             self,
@@ -47,14 +48,44 @@ class TranslatorBot(discord.Client):
         register_commands(self)
 
     async def setup_hook(self) -> None:
-        synced = await self.tree.sync()
-        log.info("synced %d commands: %s", len(synced), ", ".join(c.name for c in synced))
+        asyncio.create_task(self._sync_commands_background())
+
+    async def _sync_commands_background(self) -> None:
+        try:
+            synced = await self.tree.sync()
+            log.info("synced %d commands: %s", len(synced), ", ".join(c.name for c in synced))
+        except Exception as e:
+            log.warning("command sync warning: %s", e)
 
     async def on_ready(self) -> None:
         log.info("logged in as %s (id=%s)", self.user, self.user.id if self.user else "?")
 
-    async def translate(self, mode: str, text: str, tone: str | None = None) -> Result:
-        return await asyncio.to_thread(self.translator.run, mode, text, tone)
+    def is_ollama_available(self) -> bool:
+        """ตรวจสอบว่าในเครื่องมี Ollama เปิดอยู่และมีโมเดลพร้อมใช้หรือไม่"""
+        try:
+            return self.translator._provider("ollama").available()
+        except Exception:
+            return False
+
+    def _sync_config_if_needed(self) -> None:
+        """ตรวจสอบและโหลด config.toml ใหม่ทันทีหากมีการเปลี่ยนแปลง (เช่น สลับไปใช้ Local Model ใน Tray)"""
+        try:
+            cfg_file = self.translator.config.root / "config.toml"
+            if cfg_file.exists():
+                mtime = cfg_file.stat().st_mtime
+                if mtime != self._cfg_mtime:
+                    self._cfg_mtime = mtime
+                    self.translator.reload()
+                    log.info("Discord bot reloaded config: active_provider=%s", self.translator.config.active_provider)
+        except Exception as e:
+            log.warning("Discord bot reload config failed: %s", e)
+
+    async def translate(self, mode: str, text: str, tone: str | None = None, provider: str | None = None) -> Result:
+        return await asyncio.to_thread(self._translate_sync, mode, text, tone, provider)
+
+    def _translate_sync(self, mode: str, text: str, tone: str | None = None, provider: str | None = None) -> Result:
+        self._sync_config_if_needed()
+        return self.translator.run(mode, text, tone, provider=provider)
 
 
 # ---------------------------------------------------------------------------- helpers
@@ -63,32 +94,122 @@ def _clip(text: str) -> str:
 
 
 def _format(result: Result) -> str:
-    footer = f"-# {MODE_LABELS.get(result.mode, result.mode)} · {result.provider}/{result.model} · {result.seconds:.1f}s"
+    fallback_tag = " · (ตัวสำรอง)" if result.fallback_used else ""
+    provider_label = "Ollama (Local)" if result.provider == "ollama" else "Gemini"
+    footer = f"-# 🤖 ผู้ให้บริการ: **{provider_label}** (`{result.model}`){fallback_tag} · {result.seconds:.1f}s · {MODE_LABELS.get(result.mode, result.mode)}"
     if result.mode in ("reply", "polish"):
         footer += f" · {TONE_LABELS.get(result.tone, result.tone)}"
-    if result.fallback_used:
-        footer += " · ตัวสำรอง"
     return _clip(result.text) + "\n" + footer
 
 
 async def _send_draft(interaction: discord.Interaction, original: str, result: Result) -> None:
-    """โหมดตอบ/ขัดเกลา: ส่ง 2 ข้อความ (เห็นเฉพาะคุณ)
-    1) อังกฤษล้วนๆ เพื่อก๊อปไปวางในช่องพิมพ์แล้วส่งในชื่อคุณเอง
-    2) แปลกลับเป็นไทยให้เช็กความหมาย + ปุ่มเปลี่ยนน้ำเสียง
-    """
-    bot: TranslatorBot = interaction.client  # type: ignore[assignment]
-    await interaction.followup.send(_clip(result.text), ephemeral=True)
-    check = ""
-    if bot.translator.config.auto_back_translate:
+    """โหมดตอบ/ขัดเกลา: ส่งข้อความร่าง (เห็นเฉพาะคุณ) พร้อมปุ่มส่งลงแชนเนลทันทีและปุ่มเปลี่ยนน้ำเสียง"""
+    draft_msg = await interaction.followup.send(_clip(result.text), ephemeral=True, wait=True)
+    fallback_tag = " · (ตัวสำรอง)" if result.fallback_used else ""
+    provider_label = "Ollama (Local)" if result.provider == "ollama" else "Gemini"
+    footer = (f"-# 🤖 แปลด้วย: **{provider_label}** (`{result.model}`){fallback_tag} · {result.seconds:.1f}s · {TONE_LABELS.get(result.tone, result.tone)}\n"
+              f"-# ⬆ ก๊อปข้อความไปส่งเอง หรือกดปุ่ม «ส่งข้อความนี้เลย» ด้านล่าง")
+    view = ReplyView(original, result, orig_interaction=interaction, draft_msg=draft_msg)
+    panel_msg = await interaction.followup.send(footer, view=view, ephemeral=True, wait=True)
+    view.panel_msg = panel_msg
+
+
+class FailoverView(discord.ui.View):
+    """ปุ่มสำหรับสลับไปแปลด้วย Local Model (Ollama) ทันทีเมื่อ Gemini ล้มเหลว"""
+
+    def __init__(
+        self,
+        bot: TranslatorBot,
+        mode: str,
+        text: str,
+        tone: str | None,
+        orig_interaction: discord.Interaction | None = None,
+    ):
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.mode = mode
+        self.text = text
+        self.tone = tone
+        self.orig_interaction = orig_interaction
+        self.fail_msg: discord.WebhookMessage | None = None
+
+        local_model = bot.translator.config.ollama_model or "Local"
+
+        # ปุ่มลองแปลด้วย Local Model
+        retry_btn = discord.ui.Button(
+            label=f"ลองแปลด้วย Local Model ({local_model})",
+            emoji="🔄",
+            style=discord.ButtonStyle.primary,
+            row=0,
+        )
+        retry_btn.callback = self._retry_local
+        self.add_item(retry_btn)
+
+        # ปุ่มสลับใช้ Local Model เป็นหลัก
+        switch_btn = discord.ui.Button(
+            label="สลับใช้ Local Model เป็นหลัก",
+            emoji="⚙️",
+            style=discord.ButtonStyle.secondary,
+            row=0,
+        )
+        switch_btn.callback = self._switch_and_retry_local
+        self.add_item(switch_btn)
+
+        # ปุ่มปิด
+        dismiss_btn = discord.ui.Button(
+            label="ปิด",
+            emoji="🗑️",
+            style=discord.ButtonStyle.secondary,
+            row=1,
+        )
+        dismiss_btn.callback = self._dismiss
+        self.add_item(dismiss_btn)
+
+    async def _cleanup(self):
+        if self.fail_msg is not None:
+            try:
+                await self.fail_msg.delete()
+            except Exception:
+                pass
+
+    async def _dismiss(self, interaction: discord.Interaction):
         try:
-            back = await bot.translate("read", result.text)
-            check = "🔁 **ลูกค้าจะอ่านว่า:** " + _clip(back.text)
+            await interaction.response.defer()
+        except Exception:
+            pass
+        await self._cleanup()
+
+    async def _retry_local(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            result = await self.bot.translate(self.mode, self.text, self.tone, provider="ollama")
         except ProviderError as e:
-            check = f"(แปลกลับไม่สำเร็จ: {_clip(str(e))})"
-    footer = (f"-# ⬆ ก๊อปข้อความด้านบนไปวางในช่องพิมพ์แล้วกด Enter ด้วยตัวเอง จะขึ้นเป็นชื่อคุณ · "
-              f"{result.provider}/{result.model} · {result.seconds:.1f}s · {TONE_LABELS.get(result.tone, result.tone)}")
-    content = (check + "\n" if check else "") + footer
-    await interaction.followup.send(content, view=ReplyView(original, result), ephemeral=True)
+            await interaction.followup.send(
+                f"❌ Local Model ({self.bot.translator.config.ollama_model}) ก็แปลไม่สำเร็จ:\n{_clip(str(e))}",
+                ephemeral=True,
+            )
+            return
+        await self._cleanup()
+        if self.mode in ("reply", "polish"):
+            await _send_draft(interaction, self.text, result)
+        else:
+            await interaction.followup.send(_format(result), ephemeral=True)
+
+    async def _switch_and_retry_local(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            set_active_provider(self.bot.translator.config.root, "ollama")
+            self.bot.translator.reload()
+            result = await self.bot.translate(self.mode, self.text, self.tone, provider="ollama")
+        except Exception as e:
+            await interaction.followup.send(f"❌ สลับผู้ให้บริการไม่สำเร็จ: {_clip(str(e))}", ephemeral=True)
+            return
+        await self._cleanup()
+        await interaction.followup.send("⚙️ สลับผู้ให้บริการหลักเป็น **Local Model (Ollama)** เรียบร้อยแล้ว", ephemeral=True)
+        if self.mode in ("reply", "polish"):
+            await _send_draft(interaction, self.text, result)
+        else:
+            await interaction.followup.send(_format(result), ephemeral=True)
 
 
 async def _run(interaction: discord.Interaction, mode: str, text: str, tone: str | None = None) -> None:
@@ -101,6 +222,19 @@ async def _run(interaction: discord.Interaction, mode: str, text: str, tone: str
     try:
         result = await bot.translate(mode, text, tone)
     except ProviderError as e:
+        # หากแปลด้วย Gemini ล้มเหลว และในเครื่องมี Ollama/Local Model พร้อมใช้
+        if bot.translator.config.active_provider != "ollama" and bot.is_ollama_available():
+            view = FailoverView(bot, mode, text, tone, orig_interaction=interaction)
+            local_model = bot.translator.config.ollama_model or "Local Model"
+            err_short = str(e).strip().splitlines()[0] if str(e) else "เซิร์ฟเวอร์ขัดข้อง"
+            msg = (
+                f"⚠️ **Gemini แปลไม่สำเร็จ** ({err_short})\n"
+                f"-# ตรวจพบ Local Model ({local_model}) ในเครื่องของคุณ กดปุ่มด้านล่างเพื่อแปลทันที:"
+            )
+            fail_msg = await interaction.followup.send(msg, view=view, ephemeral=True, wait=True)
+            view.fail_msg = fail_msg
+            return
+
         await interaction.followup.send(f"❌ แปลไม่สำเร็จ\n{_clip(str(e))}", ephemeral=True)
         return
     except Exception as e:  # noqa: BLE001
@@ -113,18 +247,94 @@ async def _run(interaction: discord.Interaction, mode: str, text: str, tone: str
         await interaction.followup.send(_format(result), ephemeral=True)
 
 
-class ReplyView(discord.ui.View):
-    """ปุ่มใต้ร่างคำตอบ: เปลี่ยนน้ำเสียงแล้วแปลใหม่ (ไม่มีปุ่มโพสต์ เพราะข้อความต้องส่งในชื่อคุณเอง)"""
 
-    def __init__(self, original: str, result: Result):
+class ReplyView(discord.ui.View):
+    """ปุ่มใต้ร่างคำตอบ: ส่งทันที, ปิด/Dismiss, เปลี่ยนน้ำเสียง"""
+
+    def __init__(
+        self,
+        original: str,
+        result: Result,
+        orig_interaction: discord.Interaction | None = None,
+        draft_msg: discord.WebhookMessage | None = None,
+    ):
         super().__init__(timeout=900)
         self.original = original
         self.result = result
+        self.orig_interaction = orig_interaction
+        self.draft_msg = draft_msg
+        self.panel_msg: discord.WebhookMessage | None = None
+
+        # ปุ่มส่งข้อความทันที
+        send_btn = discord.ui.Button(
+            label="ส่งข้อความนี้เลย",
+            emoji="🚀",
+            style=discord.ButtonStyle.success,
+            row=0,
+        )
+        send_btn.callback = self._send_now
+        self.add_item(send_btn)
+
+        # ปุ่มปิด / Dismiss ข้อความ
+        dismiss_btn = discord.ui.Button(
+            label="ปิด",
+            emoji="🗑️",
+            style=discord.ButtonStyle.secondary,
+            row=0,
+        )
+        dismiss_btn.callback = self._dismiss
+        self.add_item(dismiss_btn)
+
+        # ปุ่มเปลี่ยนน้ำเสียง
         for tone, label in TONE_LABELS.items():
-            btn = discord.ui.Button(label=f"แปลใหม่แบบ{label}", style=discord.ButtonStyle.secondary,
-                                    disabled=(tone == result.tone))
+            btn = discord.ui.Button(
+                label=f"แปลใหม่แบบ{label}",
+                style=discord.ButtonStyle.secondary,
+                disabled=(tone == result.tone),
+                row=1,
+            )
             btn.callback = self._make_retone(tone)
             self.add_item(btn)
+
+    async def _send_now(self, interaction: discord.Interaction):
+        text_to_send = _clip(self.result.text)
+        sent = False
+        if interaction.channel:
+            try:
+                await interaction.channel.send(text_to_send)
+                sent = True
+            except Exception:
+                sent = False
+
+        if not sent:
+            await interaction.response.send_message(text_to_send, ephemeral=False)
+        else:
+            try:
+                await interaction.response.defer()
+            except Exception:
+                pass
+
+        await self._cleanup_ephemeral()
+
+    async def _dismiss(self, interaction: discord.Interaction):
+        try:
+            await interaction.response.defer()
+        except Exception:
+            pass
+        await self._cleanup_ephemeral()
+
+    async def _cleanup_ephemeral(self):
+        for msg in (self.draft_msg, self.panel_msg):
+            if msg is not None:
+                try:
+                    await msg.delete()
+                except Exception:
+                    pass
+        if self.orig_interaction is not None:
+            try:
+                await self.orig_interaction.delete_original_response()
+            except Exception:
+                pass
 
     def _make_retone(self, tone: str):
         async def callback(interaction: discord.Interaction):
@@ -133,10 +343,22 @@ class ReplyView(discord.ui.View):
             try:
                 result = await bot.translate(self.result.mode, self.original, tone)
             except ProviderError as e:
+                if bot.translator.config.active_provider != "ollama" and bot.is_ollama_available():
+                    view = FailoverView(bot, self.result.mode, self.original, tone, orig_interaction=interaction)
+                    local_model = bot.translator.config.ollama_model or "Local Model"
+                    msg = (
+                        f"⚠️ **Gemini แปลไม่สำเร็จ** ({str(e).strip().splitlines()[0]})\n"
+                        f"-# ตรวจพบ Local Model ({local_model}) ในเครื่องของคุณ กดปุ่มด้านล่างเพื่อแปลทันที:"
+                    )
+                    fail_msg = await interaction.followup.send(msg, view=view, ephemeral=True, wait=True)
+                    view.fail_msg = fail_msg
+                    return
                 await interaction.followup.send(f"❌ {_clip(str(e))}", ephemeral=True)
                 return
+            await self._cleanup_ephemeral()
             await _send_draft(interaction, self.original, result)
         return callback
+
 
 
 # ---------------------------------------------------------------------------- commands

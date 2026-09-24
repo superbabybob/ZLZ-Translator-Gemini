@@ -91,7 +91,7 @@ class ResultPopup:
         # ---- แถบหัว (ลากย้ายได้) ----
         header = tk.Frame(win, bg=PANEL)
         header.pack(fill="x")
-        title = f"{MODE_LABELS.get(result.mode, result.mode)}  ·  {result.provider} / {result.model}  ·  {result.seconds:.1f}s"
+        title = f"{MODE_LABELS.get(result.mode, result.mode)}  ·  โมเดล: {result.model}  ·  {result.seconds:.1f}s"
         if result.fallback_used:
             title += "  (ตัวสำรอง)"
         tk.Label(header, text=title, bg=PANEL, fg=MUTED, font=small, anchor="w", padx=10, pady=4).pack(side="left", fill="x", expand=True)
@@ -121,11 +121,11 @@ class ResultPopup:
 
         # ---- แปลกลับเพื่อเช็ก (โหมดตอบ/ขัดเกลา) ----
         self.check: tk.Text | None = None
-        if result.mode in ("reply", "polish"):
+        if result.mode in ("reply", "polish") and show_check_placeholder:
             ttk.Separator(body).pack(fill="x", pady=6)
             tk.Label(body, text="ลูกค้าจะอ่านว่า (แปลกลับเพื่อเช็ก):", bg=BG, fg=MUTED, font=small, anchor="w").pack(fill="x")
             self.check = tk.Text(body, height=2, wrap="word", bg=BG, fg="#c7d2fe", font=small, bd=0, padx=4, pady=2)
-            self.check.insert("1.0", "กำลังแปลกลับ..." if show_check_placeholder else "")
+            self.check.insert("1.0", "กำลังแปลกลับ...")
             self.check.configure(state="disabled")
             self.check.pack(fill="x")
 
@@ -189,3 +189,152 @@ class ResultPopup:
             self.win.destroy()
         except tk.TclError:
             pass
+
+
+class FailoverPopup:
+    """หน้าต่างแจ้งเตือนเมื่อ Gemini ล้มเหลว พร้อมปุ่มกดสลับไปใช้ Local Model (Ollama) ทันที"""
+
+    _current: "FailoverPopup | None" = None
+
+    def __init__(
+        self,
+        root: tk.Tk,
+        error_message: str,
+        original_text: str,
+        *,
+        local_model: str,
+        on_retry_local: Callable[[], None],
+        font_size: int = 10,
+    ):
+        if FailoverPopup._current is not None:
+            FailoverPopup._current.close()
+        FailoverPopup._current = self
+
+        self.on_retry_local = on_retry_local
+        win = self.win = tk.Toplevel(root)
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        win.configure(bg=BG, highlightthickness=1, highlightbackground="#f59e0b")
+        font = ("Segoe UI", font_size)
+        small = ("Segoe UI", max(font_size - 1, 8))
+
+        # ---- Header ----
+        header = tk.Frame(win, bg="#78350f")
+        header.pack(fill="x")
+        tk.Label(
+            header,
+            text="⚠️ Gemini แปลไม่สำเร็จ (โควต้าเต็มหรือเกิดข้อผิดพลาด)",
+            bg="#78350f",
+            fg="#fef3c7",
+            font=(font[0], font[1], "bold"),
+            anchor="w",
+            padx=10,
+            pady=4,
+        ).pack(side="left", fill="x", expand=True)
+        tk.Button(
+            header,
+            text="✕",
+            bg="#78350f",
+            fg="white",
+            bd=0,
+            font=small,
+            padx=8,
+            activebackground="#b91c1c",
+            command=self.close,
+        ).pack(side="right")
+
+        for widget in (header, header.winfo_children()[0]):
+            widget.bind("<ButtonPress-1>", self._drag_start)
+            widget.bind("<B1-Motion>", self._drag_move)
+
+        body = tk.Frame(win, bg=BG, padx=12, pady=10)
+        body.pack(fill="both", expand=True)
+
+        # รายละเอียดข้อผิดพลาด
+        short_err = error_message.strip().splitlines()[0] if error_message else "ทุกโมเดลของ Gemini ไม่ตอบสนอง"
+        tk.Label(
+            body,
+            text=f"สาเหตุ: {short_err}",
+            bg=BG,
+            fg="#f87171",
+            font=small,
+            anchor="w",
+            justify="left",
+            wraplength=460,
+        ).pack(fill="x", pady=(0, 6))
+
+        # ตัวอย่างข้อความ
+        snippet = original_text[:120] + ("..." if len(original_text) > 120 else "")
+        tk.Label(
+            body,
+            text=f"ข้อความที่รอแปล: \"{snippet}\"",
+            bg=PANEL,
+            fg=MUTED,
+            font=small,
+            padx=8,
+            pady=4,
+            anchor="w",
+            justify="left",
+            wraplength=460,
+        ).pack(fill="x", pady=(0, 10))
+
+        # แถบปุ่ม
+        bar = tk.Frame(body, bg=BG)
+        bar.pack(fill="x")
+
+        retry_btn = tk.Button(
+            bar,
+            text=f"🔄 ลองแปลด้วย Local Model ({local_model})",
+            command=self._do_retry,
+            bg=ACCENT,
+            fg="white",
+            bd=0,
+            padx=12,
+            pady=5,
+            font=(font[0], font[1], "bold"),
+            cursor="hand2",
+            activebackground="#4752c4",
+            activeforeground="white",
+        )
+        retry_btn.pack(side="left")
+
+        close_btn = tk.Button(
+            bar,
+            text="ปิด",
+            command=self.close,
+            bg=PANEL,
+            fg=FG,
+            bd=0,
+            padx=10,
+            pady=5,
+            font=font,
+            cursor="hand2",
+        )
+        close_btn.pack(side="right")
+
+        win.bind("<Escape>", lambda _e: self.close())
+        width = 490
+        win.update_idletasks()
+        _place_near_mouse(win, width, win.winfo_reqheight())
+        win.focus_force()
+        retry_btn.focus_set()
+
+    def _do_retry(self) -> None:
+        self.close()
+        if self.on_retry_local:
+            self.on_retry_local()
+
+    def _drag_start(self, event):
+        self._dx, self._dy = event.x_root - self.win.winfo_x(), event.y_root - self.win.winfo_y()
+
+    def _drag_move(self, event):
+        self.win.geometry(f"+{event.x_root - self._dx}+{event.y_root - self._dy}")
+
+    def close(self) -> None:
+        if FailoverPopup._current is self:
+            FailoverPopup._current = None
+        try:
+            self.win.destroy()
+        except tk.TclError:
+            pass
+

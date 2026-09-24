@@ -42,7 +42,8 @@ def enable(root: Path) -> tuple[bool, str]:
     else:
         target = _pythonw(root)
         app = root / "hotkey" / "app.py"
-        args_part = f"$s.Arguments = '\"{str(app).replace(\"'\", \"''\")}\"'; "
+        app_arg = str(app).replace("'", "''")
+        args_part = f'$s.Arguments = \'"{app_arg}"\'; '
     lnk = shortcut_path()
     tmp_lnk = root / "autostart_temp.lnk"
     script = (

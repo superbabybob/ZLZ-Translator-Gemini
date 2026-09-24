@@ -14,10 +14,34 @@ else:
     PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 GEMINI_MODELS = {
-    "flash": "gemini-3.6-flash",
-    "pro": "gemini-2.5-pro",
+    # โมเดลตระกูล Flash-Lite (โควต้าใหญ่สุด 500 ครั้ง/วัน, 15 RPM)
     "flash-lite": "gemini-3.5-flash-lite",
+    "gemini-3.5-flash-lite": "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite": "gemini-3.1-flash-lite",
+    # โมเดลตระกูล Flash (ความแม่นยำสูง 20 ครั้ง/วัน, 5 RPM)
+    "flash": "gemini-3.5-flash-lite",
+    "gemini-3.8-flash": "gemini-3.8-flash",
+    "gemini-3.7-flash": "gemini-3.7-flash",
+    "gemini-3.6-flash": "gemini-3.6-flash",
+    "gemini-3.5-flash": "gemini-3.5-flash",
+    "gemini-3-flash": "gemini-3-flash",
+    "gemini-2.5-flash-lite": "gemini-2.5-flash-lite",
+    "gemini-2.5-flash": "gemini-2.5-flash",
 }
+
+# ลำดับการสลับโมเดลสำรองเมื่อโควต้าเต็ม (HTTP 429 Quota Exceeded)
+# โมเดลหลักคือ Gemini 3.5 Flash Lite และสำรองอันดับ 1 คือ Gemini 3.1 Flash Lite (โควต้ารวม 1,000 ครั้ง/วัน)
+DEFAULT_GEMINI_FALLBACKS = [
+    "gemini-3.1-flash-lite",  # อันดับ 2: เร็ว โควต้าใหญ่ (15 RPM / 500 RPD)
+    "gemini-3.8-flash",       # อันดับ 3: Flash ใหม่สุด (5 RPM / 20 RPD)
+    "gemini-3.7-flash",       # อันดับ 4: (5 RPM / 20 RPD)
+    "gemini-3.6-flash",       # อันดับ 5: (5 RPM / 20 RPD)
+    "gemini-3.5-flash",       # อันดับ 6: (5 RPM / 20 RPD)
+    "gemini-3-flash",         # อันดับ 7: (5 RPM / 20 RPD)
+    "gemini-2.5-flash-lite",  # อันดับ 8: (10 RPM / 20 RPD)
+    "gemini-2.5-flash",       # อันดับ 9: (5 RPM / 20 RPD)
+]
+
 
 TONES = ("formal", "friendly", "brief")
 MODES = ("read", "reply", "explain", "polish")
@@ -47,12 +71,28 @@ class Config:
 
     @property
     def auto_back_translate(self) -> bool:
-        return bool(self.raw.get("general", {}).get("auto_back_translate", True))
+        return bool(self.raw.get("general", {}).get("auto_back_translate", False))
+
+    @property
+    def compact_glossary(self) -> str:
+        """คลังศัพท์แบบสรุปย่อกระชับ ลด token สำหรับ local model โดยไม่แตะต้องไฟล์ glossary.md ต้นฉบับ"""
+        from core.glossary import get_compact_glossary
+        return get_compact_glossary(self.root, self.glossary)
 
     def model_for(self, mode: str) -> str:
         """ชื่อรุ่นโมเดลสำหรับโหมดนั้น"""
-        model = str(self.raw.get("modes", {}).get(mode, "gemini-3.6-flash"))
+        model = str(self.raw.get("modes", {}).get(mode, "gemini-3.5-flash-lite"))
         return GEMINI_MODELS.get(model, model)
+
+
+    @property
+    def gemini_fallback_models(self) -> list[str]:
+        """รายชื่อโมเดลสำรองสำหรับ Gemini เมื่อโควต้าเต็ม"""
+        cfg = self.provider_cfg("gemini")
+        fallbacks = cfg.get("fallback_models")
+        if fallbacks and isinstance(fallbacks, list):
+            return [GEMINI_MODELS.get(str(m), str(m)) for m in fallbacks]
+        return list(DEFAULT_GEMINI_FALLBACKS)
 
     def provider_cfg(self, name: str) -> dict[str, Any]:
         return dict(self.raw.get("providers", {}).get(name, {}))
@@ -77,10 +117,35 @@ class Config:
         return self.env.get(key) or os.environ.get(key)
 
     @property
+    def active_provider(self) -> str:
+        """ผู้ให้บริการตัวแรกในลำดับ (ตัวหลัก) เช่น 'gemini' หรือ 'ollama'"""
+        order = self.provider_order
+        return order[0] if order else "gemini"
+
+    @property
+    def ollama_url(self) -> str:
+        """URL ของ Ollama server ในเครื่อง"""
+        return str(self.provider_cfg("ollama").get("url") or "http://localhost:11434")
+
+    @property
+    def ollama_model(self) -> str:
+        """ชื่อโมเดลหลักใน Ollama"""
+        return str(self.provider_cfg("ollama").get("model") or "qwen2.5:7b")
+
+    @property
+    def ollama_fallback_models(self) -> list[str]:
+        """รายชื่อโมเดลสำรองของ Ollama ตามลำดับความสำคัญ"""
+        raw = self.provider_cfg("ollama").get("fallback_models") or []
+        if isinstance(raw, list):
+            return [str(m) for m in raw if m]
+        return []
+
+    @property
     def data_dir(self) -> Path:
         d = self.root / "data"
         d.mkdir(exist_ok=True)
         return d
+
 
 
 def _load_env(path: Path) -> dict[str, str]:
@@ -113,16 +178,20 @@ def set_env_value(root: Path, key: str, value: str) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def set_config_value(root: Path, section: str, key: str, value: str | list[str]) -> None:
-    """แก้ค่าหนึ่งบรรทัดใน config.toml โดยคง comment และลำดับเดิมไว้ (ค่าเป็น string หรือ list ของ string)"""
+def set_config_value(root: Path, section: str, key: str, value: Any) -> None:
+    """แก้ค่าหนึ่งบรรทัดใน config.toml โดยคง comment และลำดับเดิมไว้ (รองรับ string, bool, int, float, list)"""
     import re
 
     path = root / "config.toml"
     text = path.read_text(encoding="utf-8")
-    if isinstance(value, list):
-        rendered = "[" + ", ".join('"' + v.replace('"', '\\"') + '"' for v in value) + "]"
+    if isinstance(value, bool):
+        rendered = "true" if value else "false"
+    elif isinstance(value, (int, float)):
+        rendered = str(value)
+    elif isinstance(value, list):
+        rendered = "[" + ", ".join('"' + str(v).replace('"', '\\"') + '"' for v in value) + "]"
     else:
-        rendered = '"' + value.replace('"', '\\"') + '"'
+        rendered = '"' + str(value).replace('"', '\\"') + '"'
     lines = text.splitlines()
     in_section = False
     done = False
@@ -147,6 +216,12 @@ def set_config_value(root: Path, section: str, key: str, value: str | list[str])
         if not done:
             lines += ["", f"[{section}]", f"{key} = {rendered}"]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def set_active_provider(root: Path, provider: str) -> None:
+    """สลับผู้ให้บริการหลักใน config.toml (เช่น 'gemini' หรือ 'ollama')"""
+    set_config_value(root, "general", "provider_order", [provider])
+
 
 
 def load_config(root: Path | None = None) -> Config:

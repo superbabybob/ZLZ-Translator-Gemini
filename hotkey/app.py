@@ -26,25 +26,35 @@ else:
     _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
+_HOTKEY_DIR = os.path.join(_ROOT, "hotkey")
+if os.path.isdir(_HOTKEY_DIR) and _HOTKEY_DIR not in sys.path:
+    sys.path.insert(0, _HOTKEY_DIR)
 
 import keyboard  # noqa: E402
 
-from core.config import MODES, load_config  # noqa: E402
+from core.config import MODES, load_config, set_active_provider  # noqa: E402
 from core.providers import ProviderError  # noqa: E402
 from core.translator import Result, Translator  # noqa: E402
 
 try:
     from hotkey import autostart  # noqa: E402
     from hotkey import clipboard as clip  # noqa: E402
-    from hotkey.popup import ResultPopup, Toast  # noqa: E402
+    from hotkey.popup import FailoverPopup, ResultPopup, Toast  # noqa: E402
     from hotkey.settings_dialog import SettingsDialog  # noqa: E402
     from hotkey.tray import Tray  # noqa: E402
-except ImportError:
-    import autostart  # noqa: E402
-    import clipboard as clip  # noqa: E402
-    from popup import ResultPopup, Toast  # noqa: E402
-    from settings_dialog import SettingsDialog  # noqa: E402
-    from tray import Tray  # noqa: E402
+except (ImportError, ModuleNotFoundError):
+    try:
+        from . import autostart  # noqa: E402
+        from . import clipboard as clip  # noqa: E402
+        from .popup import FailoverPopup, ResultPopup, Toast  # noqa: E402
+        from .settings_dialog import SettingsDialog  # noqa: E402
+        from .tray import Tray  # noqa: E402
+    except Exception:
+        import autostart  # type: ignore # noqa: E402
+        import clipboard as clip  # type: ignore # noqa: E402
+        from popup import FailoverPopup, ResultPopup, Toast  # type: ignore # noqa: E402
+        from settings_dialog import SettingsDialog  # type: ignore # noqa: E402
+        from tray import Tray  # type: ignore # noqa: E402
 
 log = logging.getLogger("hotkey")
 
@@ -61,6 +71,12 @@ class App:
         self.root = tk.Tk()
         self.root.withdraw()
         self.root.title("ZLZ-translator (Gemini-version)")
+        ico_file = os.path.join(_ROOT, "assets", "icon.ico")
+        if os.path.exists(ico_file):
+            try:
+                self.root.iconbitmap(ico_file)
+            except Exception:
+                pass
 
         self.tray = Tray(
             get_status=self._status_text,
@@ -75,14 +91,21 @@ class App:
             get_discord_running=self._discord_running,
             toggle_discord=self._toggle_discord,
             has_discord_token=lambda: bool(self.cfg.secret("DISCORD_TOKEN")),
-            open_settings=lambda: self.ui(self._open_settings),
+            open_settings=lambda: self.ui(self._open_settings, "general"),
+            open_glossary=lambda: self.ui(self._open_settings, "glossary"),
+            get_provider=lambda: self.cfg.active_provider,
+            set_provider=lambda p: self.ui(self._switch_provider, p),
+            is_ollama_available=self._is_ollama_available,
+            get_ollama_model=lambda: self.cfg.ollama_model,
             get_autostart=lambda: self._autostart_state,
             toggle_autostart=lambda: self.ui(self._toggle_autostart),
             get_hotkeys=self._hotkeys_text,
         )
+
         self._autostart_state = autostart.is_enabled()
         self.discord_proc: subprocess.Popen | None = None
         self._register_hotkeys()
+
 
     # ---------------------------------------------------------------- Discord app (โปรเซสลูก)
     def _discord_running(self) -> bool:
@@ -232,13 +255,19 @@ class App:
             if mode in ("reply", "polish"):
                 clip.paste_replace(result.text, previous_clip or "")
                 previous_clip = None
+                fallback_tag = " (ตัวสำรอง)" if result.fallback_used else ""
+                self.toast(f"✓ แปลด้วย {result.model}{fallback_tag} ({result.seconds:.1f}s)", seconds=1.5)
                 self.ui(self._show_popup, result, text, False)
                 self._auto_check(result)
             else:
                 self.ui(self._show_popup, result, text, True)
         except ProviderError as e:
             log.warning("translate failed: %s", e)
-            self.ui(self._show_error, str(e))
+            # หากแปลด้วย Gemini ล้มเหลว และในเครื่องมี Ollama/Local Model พร้อมใช้ ให้เด้งปุ่มสลับไปแปลด้วย Local Model ทันที
+            if self.cfg.active_provider != "ollama" and self._is_ollama_available():
+                self.ui(self._show_failover_popup, str(e), text, mode, previous_clip)
+            else:
+                self.ui(self._show_error, str(e))
         except Exception as e:  # noqa: BLE001
             log.exception("unexpected error")
             self.ui(self._show_error, f"ข้อผิดพลาดไม่คาดคิด: {e}")
@@ -248,6 +277,7 @@ class App:
             self.ui(self.tray.set_busy, False)
             self.ui(self.tray.refresh)
             self.busy.release()
+
 
     def _retone(self, original: str, tone: str, mode: str) -> None:
         """กดปุ่มน้ำเสียงในป๊อปอัป -> แปลใหม่ด้วยน้ำเสียงนั้น (ไม่ paste ทับ แค่โชว์)"""
@@ -332,6 +362,65 @@ class App:
             Toast._current.close()
         Toast(self.root, "❌ " + message, seconds=8, font_size=int(self.cfg.ui("font_size", 11)) - 1)
 
+    def _is_ollama_available(self) -> bool:
+        try:
+            return self.translator._provider("ollama").available()
+        except Exception:
+            return False
+
+    def _switch_provider(self, provider: str) -> None:
+        try:
+            set_active_provider(self.cfg.root, provider)
+            self._reload(quiet=True)
+            label = "Google Gemini (Cloud)" if provider == "gemini" else f"Local Model ({self.cfg.ollama_model})"
+            self.toast(f"สลับผู้ให้บริการเป็น {label} แล้ว")
+        except Exception as e:
+            self._show_error(f"สลับผู้ให้บริการไม่สำเร็จ: {e}")
+        self.tray.refresh()
+
+
+    def _show_failover_popup(self, error_message: str, text: str, mode: str, previous_clip: str | None) -> None:
+        if Toast._current:
+            Toast._current.close()
+        local_model = self.cfg.ollama_model or "Local Model"
+        FailoverPopup(
+            self.root,
+            error_message,
+            text,
+            local_model=local_model,
+            on_retry_local=lambda: self._retry_with_local(text, mode, previous_clip),
+            font_size=int(self.cfg.ui("font_size", 11)),
+        )
+
+    def _retry_with_local(self, text: str, mode: str, previous_clip: str | None) -> None:
+        if not self.busy.acquire(blocking=False):
+            self.toast("กำลังแปลอยู่ รอสักครู่...")
+            return
+
+        def run():
+            try:
+                self.ui(self.tray.set_busy, True)
+                self.toast(f"กำลังแปลด้วย Local Model ({self.cfg.ollama_model})...", seconds=0)
+                result = self.translator.run(mode, text, tone=self.tone, provider="ollama")
+                log.info("local fallback %s via %s/%s in %.1fs", mode, result.provider, result.model, result.seconds)
+
+                if mode in ("reply", "polish"):
+                    clip.paste_replace(result.text, previous_clip or "")
+                    fallback_tag = " (ตัวสำรอง)" if result.fallback_used else ""
+                    self.toast(f"✓ แปลด้วย Local: {result.model}{fallback_tag} ({result.seconds:.1f}s)", seconds=2.0)
+                    self.ui(self._show_popup, result, text, False)
+                    self._auto_check(result)
+                else:
+                    self.ui(self._show_popup, result, text, True)
+            except ProviderError as e:
+                self.ui(self._show_error, f"Local Model ก็แปลไม่สำเร็จ: {e}")
+            finally:
+                self.ui(self.tray.set_busy, False)
+                self.ui(self.tray.refresh)
+                self.busy.release()
+
+        threading.Thread(target=run, daemon=True, name=f"retry-local-{mode}").start()
+
     def _copy_to_clipboard(self, text: str) -> None:
         clip.restore_clipboard(text)
         Toast(self.root, "ก๊อปแล้ว", seconds=1.2)
@@ -352,8 +441,8 @@ class App:
             self._show_error(f"โหลดการตั้งค่าไม่ได้: {e}")
         self.tray.refresh()
 
-    def _open_settings(self) -> None:
-        SettingsDialog(self.root, self, on_saved=lambda: self._reload(quiet=True))
+    def _open_settings(self, initial_tab: str = "general") -> None:
+        SettingsDialog(self.root, self, on_saved=lambda: self._reload(quiet=True), initial_tab=initial_tab)
 
     def _toggle_autostart(self) -> None:
         if self._autostart_state:
@@ -370,7 +459,11 @@ class App:
         return "ปุ่มลัด: " + "  ".join(parts) if parts else "ปุ่มลัด: ยังไม่ได้ตั้ง"
 
     def _status_text(self) -> str:
-        return f"ผู้ให้บริการ: {' → '.join(self.cfg.provider_order)}"
+        act = self.cfg.active_provider
+        if act == "ollama":
+            return f"ผู้ให้บริการ: Local ({self.cfg.ollama_model})"
+        return "ผู้ให้บริการ: Google Gemini (Cloud)"
+
 
     def _usage_text(self) -> str:
         used = self.translator.usage.today()

@@ -1,20 +1,21 @@
-# คลังศัพท์และบริบทของงาน
+# Glossary and Project Context
 
-ไฟล์นี้จะถูกแนบไปกับทุกการแปล เติมได้ตามใจ ยิ่งละเอียดยิ่งแปลตรง
-บรรทัดที่ขึ้นต้นด้วย `#` เป็นหัวข้อ ส่วนที่เหลือเขียนอิสระได้
+This file is automatically attached to every translation prompt as context.
+Feel free to customize. The more detailed your context, the more accurate the translations.
+Lines starting with `#` are section headings. Everything else is free-form text.
 
-## เกี่ยวกับผม
-- ฟรีแลนซ์สาย Unity / Shader / Technical Art
-- ลูกค้าส่วนใหญ่เป็นสตูดิโอเกมและนักพัฒนาอิสระ คุยกันผ่าน Discord
+## About Me
+- Freelance technical artist specializing in Unity, Shaders, and Technical Art.
+- Clients are primarily game studios and indie developers communicating via Discord.
 
-## คำที่ไม่ต้องแปล (คงเป็นอังกฤษไว้)
+## Terms to Keep Untranslated (Keep in English)
 Shader, ShaderGraph, URP, HDRP, Built-in RP, Rig, Blend Shape, Material, Prefab,
 Sprite, Mesh, Texture, Normal Map, Post Processing, Toon Shading, Outline,
 Commit, Pull Request, Repo, Build, Package, Asset Store
 
-## ชื่อเฉพาะ
-- ZLZ Anime Shader = ชื่อแพ็กเกจ shader ของผม ห้ามแปลหรือเปลี่ยนตัวสะกด
+## Proper Nouns & Product Names
+- ZLZ Anime Shader = Name of my custom shader package. Do not translate or change spelling.
 
-## แนวทางน้ำเสียงเวลาตอบลูกค้า
-- ไม่รับปากเกินกว่าที่ผมพิมพ์ไว้ในภาษาไทย
-- ถ้าผมเขียนว่า "น่าจะ" หรือ "ลองดู" ให้แปลเป็นความไม่แน่นอน เช่น "I think", "I'll try" ไม่ใช่ "I will"
+## Tone & Communication Guidelines
+- Do not make commitments beyond what was stated in the original Thai text.
+- If the original text indicates uncertainty (e.g. "น่าจะ" or "ลองดู"), translate with polite uncertainty such as "I think", "I'll try", or "Let me check" instead of a definite "I will".

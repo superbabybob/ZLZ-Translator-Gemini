@@ -1,55 +1,92 @@
 # ============================================================
-#  ไฟล์ตั้งค่าของเครื่องมือแปล (แก้แล้วรีสตาร์ทโปรแกรม)
+#  ZLZ-Translator Configuration File
+#  (Restart application or click "Reload Settings" after edits)
 # ============================================================
 
 [general]
-# น้ำเสียงเริ่มต้นตอนแปลไทย -> อังกฤษ : formal | friendly | brief
+# Default translation tone for Thai -> English: formal | friendly | brief
 default_tone = "friendly"
 
-# ผู้ให้บริการ: gemini (Google Gemini API มีโควต้าฟรี)
+# Translation providers: gemini (Google Gemini API with free tier quota)
 provider_order = ["gemini"]
 
-# เวลารอสูงสุดต่อการแปลหนึ่งครั้ง (วินาที)
+# Maximum request timeout per translation (seconds)
 timeout_seconds = 60
 
-# หลังแปลไทย -> อังกฤษ ให้แปลกลับเป็นไทยอัตโนมัติเพื่อเช็กความหมายก่อนกด Enter
-auto_back_translate = true
+# Automatically translate English back to Thai to verify meaning (disabled by default to save quota)
+auto_back_translate = false
+
+# Use compact summarized glossary for all translations to save tokens (local model always uses compact glossary)
+compact_glossary = false
 
 [modes]
-# รุ่นโมเดลต่อโหมด (ใช้โมเดล Gemini)
-# แนะนำ:
-#   - gemini-3.6-flash      : เร็วมากและแม่นยำสูง (แนะนำสำหรับแปลทั่วไป)
-#   - gemini-3.5-flash-lite : เร็วที่สุด ประหยัด token
-read    = "gemini-3.6-flash"   # อังกฤษ -> ไทย
-reply   = "gemini-3.6-flash"   # ไทย -> อังกฤษ
-explain = "gemini-3.6-flash"   # อธิบายว่าลูกค้าหมายถึงอะไร
-polish  = "gemini-3.6-flash"   # ขัดเกลาอังกฤษที่พิมพ์เอง
+# Active model per mode (Priority #1: gemini-3.5-flash-lite with 500 requests/day quota)
+read    = "gemini-3.5-flash-lite"   # English -> Thai
+reply   = "gemini-3.5-flash-lite"   # Thai -> English
+explain = "gemini-3.5-flash-lite"   # Explain customer intent
+polish  = "gemini-3.5-flash-lite"   # Refine user-written English
 
 # ------------------------------------------------------------
 [providers.gemini]
-# ใส่คีย์ในไฟล์ .env ชื่อ GEMINI_API_KEY
-# ขอคีย์ฟรีได้ที่ https://aistudio.google.com/apikey
-model = "gemini-3.6-flash"
+# Set your API key in .env as GEMINI_API_KEY
+# Get your free key at: https://aistudio.google.com/apikey
+model = "gemini-3.5-flash-lite"
+
+# Automatic model fallback chain on quota exhaustion (HTTP 429), high demand (HTTP 503), or timeout:
+# If primary model is unavailable, these fallback models will be attempted in order:
+fallback_models = [
+    "gemini-3.1-flash-lite",  # Priority #2: 15 RPM / 500 requests per day (High quota)
+    "gemini-3.8-flash",       # Priority #3: 5 RPM / 20 requests per day (Latest Flash)
+    "gemini-3.7-flash",       # Priority #4: 5 RPM / 20 requests per day
+    "gemini-3.6-flash",       # Priority #5: 5 RPM / 20 requests per day
+    "gemini-3.5-flash",       # Priority #6: 5 RPM / 20 requests per day
+    "gemini-3-flash",         # Priority #7: 5 RPM / 20 requests per day
+    "gemini-2.5-flash-lite",  # Priority #8: 10 RPM / 20 requests per day
+    "gemini-2.5-flash"        # Priority #9: 5 RPM / 20 requests per day
+]
+
+
+# Cooldown duration (in seconds) to pause a rate-limited model before retrying
+cooldown_seconds = 60
+
+# ------------------------------------------------------------
+[providers.ollama]
+# URL of your local Ollama instance (default: http://localhost:11434)
+# Optional: Used when switching provider to local models in System Tray / Settings
+url = "http://localhost:11434"
+
+# Primary local model to use for translation (e.g. qwen2.5:7b, llama3.2, mistral)
+model = "qwen2.5:7b"
+
+# Priority list of fallback local models if primary model is unavailable or fails:
+fallback_models = []
+
+# Timeout for local model generation in seconds (local models may take longer on CPU/GPU)
+timeout_seconds = 120
+
+# Temperature for generation (0.1 - 0.5 recommended for translation consistency)
+temperature = 0.3
+
 
 # ------------------------------------------------------------
 [hotkeys]
-# ใช้ F-key เพราะไม่ขึ้นกับภาษาแป้นพิมพ์ (ไทย/อังกฤษ) และไม่ชนกับปุ่มลัดของ Discord
-read    = "f8"           # ลากคลุมอังกฤษ -> ป๊อปอัปไทย
-reply   = "f9"           # พิมพ์ไทยในช่องแชท -> แทนที่ด้วยอังกฤษ (ยังไม่ส่ง)
-explain = "shift+f8"     # ลากคลุม -> อธิบายว่าลูกค้าหมายถึงอะไร
-polish  = "shift+f9"     # อังกฤษที่พิมพ์เองในช่องแชท -> แก้ให้ถูกและเป็นธรรมชาติ
+# F-keys work regardless of keyboard language (TH/EN) and won't conflict with Discord
+read    = "f8"           # Highlight English -> Thai popup
+reply   = "f9"           # Type Thai in input box -> Replace with English (without sending)
+explain = "shift+f8"     # Highlight text -> Explain customer intent
+polish  = "shift+f9"     # Type English in input box -> Proofread and polish naturally
 
-# ให้ปุ่มลัดทำงานเฉพาะเมื่อหน้าต่างที่เปิดอยู่มีคำเหล่านี้ในชื่อ (ว่าง = ทุกโปรแกรม)
-# เช่น ["Discord"] จะไม่รบกวนตอนใช้โปรแกรมอื่นที่ใช้ F8/F9 อยู่แล้ว
+# Restrict hotkeys to specific active window titles (empty = active in all applications)
+# Example: ["Discord"] prevents hotkey conflicts in other apps
 only_in_apps = []
 
 [discord]
-# เปิด Discord app อัตโนมัติพร้อมโปรแกรม Hotkey (ต้องมี DISCORD_TOKEN ใน .env)
-# เปิด/ปิดระหว่างใช้งานได้ที่เมนูไอคอน tray
+# Automatically start Discord app bot alongside Hotkey app (requires DISCORD_TOKEN in .env)
+# Can be toggled anytime from the system tray menu
 autostart = false
 
 [ui]
-# ขนาดตัวอักษรในป๊อปอัป
+# Font size for popup windows
 font_size = 11
-# ป๊อปอัปปิดเองหลังกี่วินาที (0 = ไม่ปิดเอง)
+# Auto-close popup after seconds (0 = keep open until dismissed)
 auto_close_seconds = 0

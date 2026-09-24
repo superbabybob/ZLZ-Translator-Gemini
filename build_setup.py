@@ -47,13 +47,16 @@ def main() -> None:
     cmd = [
         str(pyinstaller),
         "--noconfirm",
+        "--clean",
         "--onedir",
         "--windowed",
         "--name", "ZLZ-translator",
         "--paths", str(ROOT),
+        "--icon", str(ROOT / "assets" / "icon.ico"),
         "--add-data", f"{ROOT / 'config.toml'};.",
         "--add-data", f"{ROOT / 'glossary.md'};.",
         "--add-data", f"{ROOT / '.env.example'};.",
+        "--add-data", f"{ROOT / 'assets'};assets",
         "--hidden-import", "hotkey",
         "--hidden-import", "hotkey.autostart",
         "--hidden-import", "hotkey.clipboard",
@@ -66,6 +69,8 @@ def main() -> None:
         "--hidden-import", "pyperclip",
         "--hidden-import", "tomllib",
         "--hidden-import", "discord",
+        "--hidden-import", "core.glossary",
+        "--hidden-import", "core.providers.ollama",
         str(ROOT / "run.py"),
     ]
 
@@ -82,6 +87,14 @@ def main() -> None:
         if src.exists():
             shutil.copyfile(src, dst)
             print(f"  Copied {filename} to {APP_DIR.name}/")
+
+    assets_src = ROOT / "assets"
+    assets_dst = APP_DIR / "assets"
+    if assets_src.exists():
+        if assets_dst.exists():
+            shutil.rmtree(assets_dst)
+        shutil.copytree(assets_src, assets_dst)
+        print(f"  Copied assets/ to {APP_DIR.name}/")
 
     # Step 3: Run Inno Setup Compiler (ISCC)
     print("\n[3/3] Packaging installer with Inno Setup...")

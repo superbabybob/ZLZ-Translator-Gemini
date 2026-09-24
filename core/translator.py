@@ -77,7 +77,6 @@ class Translator:
             raise ValueError("ไม่มีข้อความให้แปล")
         tone = tone if tone in TONES else self.config.default_tone
 
-        system = build_system_prompt(mode, self.config.glossary, tone)
         user = build_user_prompt(mode, text)
         model_alias = self.config.model_for(mode)
         order = [provider] if provider else self.config.provider_order
@@ -92,6 +91,12 @@ class Translator:
             if not prov.available():
                 errors.append(f"{name}: ยังไม่พร้อมใช้ (ขาดคีย์หรือไบนารี)")
                 continue
+
+            # สรุป glossary ย่อกระชับเมื่อใช้ Local Model (ollama) หรือเปิด compact_glossary ใน config
+            use_compact = (name == "ollama") or bool(self.config.raw.get("general", {}).get("compact_glossary", False))
+            active_glossary = self.config.compact_glossary if use_compact else self.config.glossary
+            system = build_system_prompt(mode, active_glossary, tone)
+
             started = time.perf_counter()
             try:
                 out = prov.complete(system, user, model_alias)
@@ -101,7 +106,8 @@ class Translator:
                 continue
             elapsed = time.perf_counter() - started
             self.usage.record(name)
-            model = getattr(prov, "model", None) or model_alias
-            return Result(out, mode, tone, name, str(model), elapsed, fallback_used=index > 0)
+            model = getattr(prov, "last_model_used", None) or getattr(prov, "model", None) or model_alias
+            fallback_used = (index > 0) or bool(getattr(prov, "last_fallback_used", False))
+            return Result(out, mode, tone, name, str(model), elapsed, fallback_used=fallback_used)
 
         raise ProviderError("แปลไม่สำเร็จ ทุกผู้ให้บริการล้มเหลว:\n- " + "\n- ".join(errors))
