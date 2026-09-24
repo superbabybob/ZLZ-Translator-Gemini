@@ -1,4 +1,7 @@
-# Discord Translator
+# Discord Translator (ZLZ-Translator)
+
+Repo: https://github.com/zlz-studio/ZLZ-Translator
+มือใหม่เริ่มที่ **[FRIEND_GUIDE.md](FRIEND_GUIDE.md)** (ติดตั้งใน 10 นาที ใช้แค่บัญชี Gmail)
 
 เครื่องมือแปลสำหรับฟรีแลนซ์ไทยที่ต้องคุยกับลูกค้าต่างชาติ ใช้ได้กับ Discord และทุกแอปบน Windows
 แปลผ่าน **Claude Code** (ใช้โควต้าสมาชิก Claude ที่มีอยู่ ไม่ต้องเติมเครดิต) และสลับไป Gemini / Claude API / Ollama ได้
