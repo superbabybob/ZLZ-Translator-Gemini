@@ -36,20 +36,25 @@ def _pythonw(root: Path) -> Path:
 
 
 def enable(root: Path) -> tuple[bool, str]:
-    target = _pythonw(root)
-    app = root / "hotkey" / "app.py"
+    if getattr(sys, "frozen", False):
+        target = Path(sys.executable)
+        args_part = ""
+    else:
+        target = _pythonw(root)
+        app = root / "hotkey" / "app.py"
+        args_part = f"$s.Arguments = '\"{str(app).replace(\"'\", \"''\")}\"'; "
     lnk = shortcut_path()
     tmp_lnk = root / "autostart_temp.lnk"
     script = (
         "$ws = New-Object -ComObject WScript.Shell; "
         "$s = $ws.CreateShortcut('{tmp}'); "
         "$s.TargetPath = '{target}'; "
-        "$s.Arguments = '\"{app}\"'; "
+        f"{args_part}"
         "$s.WorkingDirectory = '{root}'; "
         "$s.Description = 'ZLZ-translator (Gemini-version)'; "
         "$s.Save()"
     ).format(tmp=str(tmp_lnk).replace("'", "''"), target=str(target).replace("'", "''"),
-             app=str(app).replace("'", "''"), root=str(root).replace("'", "''"))
+             root=str(root).replace("'", "''"))
     try:
         proc = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
                               capture_output=True, text=True, encoding="utf-8", errors="replace",

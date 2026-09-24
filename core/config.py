@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 import os
+import sys
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if getattr(sys, "frozen", False):
+    PROJECT_ROOT = Path(sys.executable).resolve().parent
+else:
+    PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 GEMINI_MODELS = {
     "flash": "gemini-3.6-flash",
@@ -149,7 +153,17 @@ def load_config(root: Path | None = None) -> Config:
     root = Path(root or os.environ.get("TRANSLATOR_ROOT") or PROJECT_ROOT)
     cfg_path = root / "config.toml"
     if not cfg_path.exists():
-        raise FileNotFoundError(f"ไม่พบไฟล์ตั้งค่า: {cfg_path}")
+        bundled = root / "_internal" / "config.toml"
+        if bundled.exists():
+            import shutil
+            shutil.copyfile(bundled, cfg_path)
+            for extra in ("glossary.md", ".env.example"):
+                src = root / "_internal" / extra
+                dst = root / extra
+                if src.exists() and not dst.exists():
+                    shutil.copyfile(src, dst)
+        else:
+            raise FileNotFoundError(f"ไม่พบไฟล์ตั้งค่า: {cfg_path}")
     with cfg_path.open("rb") as f:
         raw = tomllib.load(f)
     glossary_path = root / "glossary.md"

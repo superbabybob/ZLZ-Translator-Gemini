@@ -86,7 +86,8 @@ class App:
             return
         exe = sys.executable
         creationflags = 0x08000000 if sys.platform == "win32" else 0  # CREATE_NO_WINDOW
-        self.discord_proc = subprocess.Popen([exe, "-m", "discord_app.bot"], cwd=str(self.cfg.root),
+        cmd = [exe, "--discord-bot"] if getattr(sys, "frozen", False) else [exe, "-m", "discord_app.bot"]
+        self.discord_proc = subprocess.Popen(cmd, cwd=str(self.cfg.root),
                                              creationflags=creationflags)
         log.info("discord app started pid=%s", self.discord_proc.pid)
         self.toast("เปิด Discord app แล้ว (พร้อมใช้ใน 10 วินาที)")
@@ -400,6 +401,10 @@ def _setup_logging(cfg) -> None:
 
 
 def main() -> None:
+    if "--discord-bot" in sys.argv:
+        from discord_app.bot import main as discord_main
+        discord_main()
+        return
     app = App()
     _setup_logging(app.cfg)
     app.run()

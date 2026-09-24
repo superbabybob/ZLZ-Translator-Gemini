@@ -37,21 +37,28 @@
 
 ---
 
-## 🚀 เริ่มต้นใช้งานใน 3 นาที
+## 🚀 เริ่มต้นใช้งาน
 
-### 1. ดาวน์โหลดโปรแกรม
-- **แบบที่ 1 (ง่ายสุด)**: กดปุ่มเขียว **`Code`** ด้านบน แล้วเลือก [Download ZIP](https://github.com/superbabybob/ZLZ-Translator-Gemini/archive/refs/heads/main.zip) จากนั้นแตกไฟล์ลงในเครื่องของคุณ
-- **แบบที่ 2 (ผ่าน Git)**:
-  ```bash
-  git clone https://github.com/superbabybob/ZLZ-Translator-Gemini.git
-  ```
+### ทางเลือกที่ 1: ติดตั้งผ่านไฟล์ Setup .exe (ง่ายที่สุด ไม่ต้องลง Python)
+- ดาวน์โหลดไฟล์ **`ZLZ-Translator-Setup.exe`** จากหน้า [Releases](https://github.com/superbabybob/ZLZ-Translator-Gemini/releases) (หรือในโฟลเดอร์ `dist/`)
+- ดับเบิลคลิกไฟล์ติดตั้ง -> กด Next เพื่อติดตั้งลงเครื่องได้ทันที
+- ตัวติดตั้งจะสร้าง Shortcut **`ZLZ-translator (Gemini-version)`** บนหน้า Desktop และใน Start Menu ให้โดยอัตโนมัติ
 
-### 2. ติดตั้งในคลิกเดียว
-- ดับเบิลคลิกไฟล์ **`setup.bat`** (หรือดับเบิลคลิก **`run_hotkey.bat`** ได้เลย ระบบจะติดตั้งให้อัตโนมัติในครั้งแรก)
-- หากเครื่องของคุณยังไม่มี Python ตัวติดตั้งจะถามเพื่อติดตั้ง Python 3.12 ให้อัตโนมัติ
-- เมื่อติดตั้งเสร็จ ตัวโปรแกรมจะสร้าง Shortcut **`ZLZ-translator (Gemini-version)`** ไว้บนหน้า Desktop ให้ทันที
+---
 
-### 3. ใส่ API Key ของ Gemini (ฟรี)
+### ทางเลือกที่ 2: ติดตั้งผ่าน Source Code / Git
+1. **ดาวน์โหลดโค้ด**:
+   - กดปุ่มเขียว **`Code`** ด้านบน แล้วเลือก [Download ZIP](https://github.com/superbabybob/ZLZ-Translator-Gemini/archive/refs/heads/main.zip) จากนั้นแตกไฟล์ลงในเครื่อง หรือ Clone ผ่าน Git:
+     ```bash
+     git clone https://github.com/superbabybob/ZLZ-Translator-Gemini.git
+     ```
+2. **รันตัวติดตั้ง**:
+   - ดับเบิลคลิกไฟล์ **`setup.bat`** (หรือรัน **`run_hotkey.bat`** ได้เลย ระบบจะติดตั้งให้อัตโนมัติในครั้งแรก)
+   - หากยังไม่มี Python ตัวติดตั้งจะถามเพื่อติดตั้ง Python 3.12 ให้อัตโนมัติ
+
+---
+
+### ขั้นตอนสุดท้าย: ใส่ API Key ของ Gemini (ฟรี)
 1. เมื่อเปิดโปรแกรม หากยังไม่พบคีย์ ระบบจะเปิดหน้าต่าง **"ตั้งค่าคีย์และบัญชี"** ขึ้นมาให้อัตโนมัติ
 2. กดปุ่ม **"🌐 เปิดหน้าขอคีย์ Gemini"** (ล็อกอินบัญชี Google ที่ [Google AI Studio](https://aistudio.google.com/apikey))
 3. กด **Create API key** คัดลอกคีย์มาวางในช่อง `GEMINI_API_KEY`
