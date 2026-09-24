@@ -51,18 +51,62 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 
 [Code]
 var
-  ApiKeyPage: TInputQueryWizardPage;
+  ApiKeyCustomPage: TWizardPage;
+  ApiKeyEdit: TNewEdit;
+
+procedure LinkClick(Sender: TObject);
+var
+  ErrorCode: Integer;
+begin
+  ShellExec('open', 'https://aistudio.google.com/apikey', '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
+end;
 
 procedure InitializeWizard;
+var
+  InfoLabel: TNewStaticText;
+  LinkLabel: TNewStaticText;
+  PromptLabel: TNewStaticText;
+  InputLabel: TNewStaticText;
 begin
-  ApiKeyPage := CreateInputQueryPage(
+  ApiKeyCustomPage := CreateCustomPage(
     wpSelectTasks,
     'Google Gemini API Key',
-    'Configure your free translation API key (1,500 free requests/day)',
-    'You can obtain a free Gemini API Key at https://aistudio.google.com/apikey'#13#10#13#10 +
-    'Paste your GEMINI_API_KEY below (or leave blank to configure later in the app):'
+    'Configure your free translation API key (1,500 free requests/day)'
   );
-  ApiKeyPage.Add('GEMINI_API_KEY:', False);
+
+  InfoLabel := TNewStaticText.Create(ApiKeyCustomPage);
+  InfoLabel.Parent := ApiKeyCustomPage.Surface;
+  InfoLabel.Top := ScaleY(8);
+  InfoLabel.Left := ScaleX(0);
+  InfoLabel.Caption := 'You can obtain a free Gemini API Key at:';
+
+  LinkLabel := TNewStaticText.Create(ApiKeyCustomPage);
+  LinkLabel.Parent := ApiKeyCustomPage.Surface;
+  LinkLabel.Top := InfoLabel.Top + InfoLabel.Height + ScaleY(4);
+  LinkLabel.Left := ScaleX(0);
+  LinkLabel.Caption := 'https://aistudio.google.com/apikey';
+  LinkLabel.Cursor := crHand;
+  LinkLabel.Font.Color := clBlue;
+  LinkLabel.Font.Style := [fsUnderline];
+  LinkLabel.OnClick := @LinkClick;
+
+  PromptLabel := TNewStaticText.Create(ApiKeyCustomPage);
+  PromptLabel.Parent := ApiKeyCustomPage.Surface;
+  PromptLabel.Top := LinkLabel.Top + LinkLabel.Height + ScaleY(18);
+  PromptLabel.Left := ScaleX(0);
+  PromptLabel.Caption := 'Paste your GEMINI_API_KEY below (or leave blank to configure later in the app):';
+
+  InputLabel := TNewStaticText.Create(ApiKeyCustomPage);
+  InputLabel.Parent := ApiKeyCustomPage.Surface;
+  InputLabel.Top := PromptLabel.Top + PromptLabel.Height + ScaleY(16);
+  InputLabel.Left := ScaleX(0);
+  InputLabel.Caption := 'GEMINI_API_KEY:';
+
+  ApiKeyEdit := TNewEdit.Create(ApiKeyCustomPage);
+  ApiKeyEdit.Parent := ApiKeyCustomPage.Surface;
+  ApiKeyEdit.Top := InputLabel.Top + InputLabel.Height + ScaleY(4);
+  ApiKeyEdit.Left := ScaleX(0);
+  ApiKeyEdit.Width := ApiKeyCustomPage.SurfaceWidth;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -75,7 +119,7 @@ var
 begin
   if CurStep = ssPostInstall then
   begin
-    ApiKey := Trim(ApiKeyPage.Values[0]);
+    ApiKey := Trim(ApiKeyEdit.Text);
     EnvPath := ExpandConstant('{app}\.env');
     
     if ApiKey <> '' then
