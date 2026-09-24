@@ -20,8 +20,10 @@ import tkinter as tk
 from logging.handlers import RotatingFileHandler
 from typing import Callable
 
-# ให้รันได้ทั้ง `python -m hotkey.app` และ `pythonw hotkey\app.py` (จาก Task Scheduler)
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if getattr(sys, "frozen", False):
+    _ROOT = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+else:
+    _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
@@ -30,11 +32,19 @@ import keyboard  # noqa: E402
 from core.config import MODES, load_config  # noqa: E402
 from core.providers import ProviderError  # noqa: E402
 from core.translator import Result, Translator  # noqa: E402
-from hotkey import autostart  # noqa: E402
-from hotkey import clipboard as clip  # noqa: E402
-from hotkey.popup import ResultPopup, Toast  # noqa: E402
-from hotkey.settings_dialog import SettingsDialog  # noqa: E402
-from hotkey.tray import Tray  # noqa: E402
+
+try:
+    from hotkey import autostart  # noqa: E402
+    from hotkey import clipboard as clip  # noqa: E402
+    from hotkey.popup import ResultPopup, Toast  # noqa: E402
+    from hotkey.settings_dialog import SettingsDialog  # noqa: E402
+    from hotkey.tray import Tray  # noqa: E402
+except ImportError:
+    import autostart  # noqa: E402
+    import clipboard as clip  # noqa: E402
+    from popup import ResultPopup, Toast  # noqa: E402
+    from settings_dialog import SettingsDialog  # noqa: E402
+    from tray import Tray  # noqa: E402
 
 log = logging.getLogger("hotkey")
 
