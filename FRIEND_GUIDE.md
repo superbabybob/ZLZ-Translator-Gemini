@@ -18,9 +18,9 @@
 - ไปที่ python.org/downloads โหลด Python 3.12 หรือใหม่กว่า
 - ตอนติดตั้ง **ติ๊ก "Add python.exe to PATH"** ก่อนกด Install
 
-**2. โหลดโปรแกรม** เลือกทางใดทางหนึ่ง แล้ววางไว้ที่ไหนก็ได้ เช่น `Documents\Discord-Translator`
-- *ง่ายสุด*: เปิด https://github.com/zlz-studio/ZLZ-Translator กดปุ่มเขียว **Code** แล้ว **Download ZIP** แตกไฟล์
-- *ถ้ามี git*: `git clone https://github.com/zlz-studio/ZLZ-Translator.git` (ข้อดี: อัปเดตเวอร์ชันใหม่ได้ด้วยดับเบิลคลิก `update.bat`)
+**2. โหลดโปรแกรม** เลือกทางใดทางหนึ่ง แล้ววางไว้ที่ไหนก็ได้ เช่น `Documents\ZLZ-Translator-Gemini`
+- *ง่ายสุด*: เปิด https://github.com/superbabybob/ZLZ-Translator-Gemini กดปุ่มเขียว **Code** แล้ว **Download ZIP** แตกไฟล์
+- *ถ้ามี git*: `git clone https://github.com/superbabybob/ZLZ-Translator-Gemini.git` (ข้อดี: อัปเดตเวอร์ชันใหม่ได้ด้วยดับเบิลคลิก `update.bat`)
 
 **3. ดับเบิลคลิก `setup.bat`** รอจนขึ้น "ติดตั้งเสร็จแล้ว" (ใช้เน็ตโหลดไลบรารีราว 1 ถึง 2 นาที)
 
