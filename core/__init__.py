@@ -1,0 +1,1 @@
+"""แกนแปลของ discord-translator"""

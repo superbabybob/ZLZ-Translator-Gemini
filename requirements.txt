@@ -1,0 +1,11 @@
+# หน้ากาก Hotkey (Windows)
+keyboard>=0.13
+pyperclip>=1.8
+pystray>=0.19
+Pillow>=10
+
+# หน้ากาก Discord User App
+discord.py>=2.4
+
+# ตัวเลือก: ใช้ Claude API โดยตรง (provider "anthropic")
+# anthropic>=1.0
