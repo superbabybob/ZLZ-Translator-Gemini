@@ -108,6 +108,42 @@ def set_env_value(root: Path, key: str, value: str) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def set_config_value(root: Path, section: str, key: str, value: str | list[str]) -> None:
+    """แก้ค่าหนึ่งบรรทัดใน config.toml โดยคง comment และลำดับเดิมไว้ (ค่าเป็น string หรือ list ของ string)"""
+    import re
+
+    path = root / "config.toml"
+    text = path.read_text(encoding="utf-8")
+    if isinstance(value, list):
+        rendered = "[" + ", ".join('"' + v.replace('"', '\\"') + '"' for v in value) + "]"
+    else:
+        rendered = '"' + value.replace('"', '\\"') + '"'
+    lines = text.splitlines()
+    in_section = False
+    done = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            in_section = stripped == f"[{section}]"
+            continue
+        if in_section and re.match(rf"^\s*{re.escape(key)}\s*=", line):
+            m = re.search(r"\s+#.*$", line)  # เก็บ comment ท้ายบรรทัดไว้
+            comment = m.group(0) if m else ""
+            lines[i] = f"{key} = {rendered}{comment}"
+            done = True
+            break
+    if not done:
+        # ไม่มีบรรทัดนี้: เพิ่มท้าย section (หรือสร้าง section ใหม่ท้ายไฟล์)
+        for i, line in enumerate(lines):
+            if line.strip() == f"[{section}]":
+                lines.insert(i + 1, f"{key} = {rendered}")
+                done = True
+                break
+        if not done:
+            lines += ["", f"[{section}]", f"{key} = {rendered}"]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def load_config(root: Path | None = None) -> Config:
     root = Path(root or os.environ.get("TRANSLATOR_ROOT") or PROJECT_ROOT)
     cfg_path = root / "config.toml"

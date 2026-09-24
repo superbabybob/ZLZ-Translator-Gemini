@@ -9,9 +9,18 @@ import webbrowser
 from tkinter import ttk
 from typing import Callable
 
-from core.config import set_env_value
+import keyboard
+
+from core.config import MODES, set_config_value, set_env_value
 from core.providers import ProviderError
 from hotkey.popup import ACCENT, BG, FG, MUTED, PANEL
+
+HOTKEY_LABELS = {
+    "read": "แปลที่ลากคลุม -> ไทย",
+    "reply": "ไทยในช่องพิมพ์ -> อังกฤษ",
+    "explain": "อธิบายที่ลากคลุม",
+    "polish": "แก้อังกฤษที่พิมพ์เอง",
+}
 
 GEMINI_URL = "https://aistudio.google.com/apikey"
 DISCORD_URL = "https://discord.com/developers/applications"
@@ -64,6 +73,25 @@ class SettingsDialog:
         self.claude_status.pack(side="left")
         self._button(row, "ล็อกอิน Claude Code", self._claude_login).pack(side="right")
 
+        # ---------- ปุ่มลัด ----------
+        self._section(body, "4. ปุ่มลัด (ใช้ได้ทุกโปรแกรม ไม่ใช่แค่ Discord)", font, top=14)
+        tk.Label(body, text='กด "กดปุ่ม" แล้วกดปุ่มที่ต้องการบนคีย์บอร์ด เช่น F7 หรือ Ctrl+Shift+T  (พิมพ์เองก็ได้ เช่น ctrl+shift+t)',
+                 bg=BG, fg=MUTED, font=small, justify="left", wraplength=520).pack(anchor="w")
+        self.hotkey_vars: dict[str, tk.StringVar] = {}
+        for mode in MODES:
+            row = tk.Frame(body, bg=BG)
+            row.pack(fill="x", pady=1)
+            tk.Label(row, text=HOTKEY_LABELS[mode], bg=BG, fg=MUTED, font=small, width=24, anchor="w").pack(side="left")
+            var = tk.StringVar(value=cfg.hotkey(mode) or "")
+            self.hotkey_vars[mode] = var
+            tk.Entry(row, textvariable=var, bg=PANEL, fg=FG, insertbackground=FG, relief="flat",
+                     font=("Consolas", 10), width=18).pack(side="left", ipady=3)
+            self._button(row, "กดปุ่ม", lambda m=mode: self._capture_hotkey(m)).pack(side="left", padx=(6, 0))
+        self.only_discord_var = tk.BooleanVar(value=any("discord" in a.lower() for a in cfg.only_in_apps))
+        tk.Checkbutton(body, text="ให้ปุ่มลัดทำงานเฉพาะตอนหน้าต่าง Discord เปิดอยู่ (กันชนกับ Unity / Visual Studio)",
+                       variable=self.only_discord_var, bg=BG, fg=FG, selectcolor=PANEL, activebackground=BG,
+                       activeforeground=FG, font=small, anchor="w").pack(anchor="w", pady=(4, 0))
+
         # ---------- ปุ่มล่าง ----------
         ttk.Separator(body).pack(fill="x", pady=12)
         bar = tk.Frame(body, bg=BG)
@@ -106,9 +134,27 @@ class SettingsDialog:
 
     # ---------------------------------------------------------------- actions
     def _save(self, quiet: bool = False) -> bool:
+        # ตรวจปุ่มลัดก่อน: ต้องเป็นชื่อปุ่มที่รู้จัก และห้ามซ้ำกัน
+        hotkeys: dict[str, str] = {}
+        for mode, var in self.hotkey_vars.items():
+            combo = var.get().strip().lower().replace(" ", "")
+            if not combo:
+                continue
+            try:
+                keyboard.parse_hotkey(combo)
+            except (ValueError, KeyError):
+                self.status.configure(text=f"ปุ่มลัด '{combo}' ({HOTKEY_LABELS[mode]}) ไม่ถูกต้อง ลองกดปุ่ม \"กดปุ่ม\" แล้วกดคีย์ที่ต้องการ", fg="#f87171")
+                return False
+            if combo in hotkeys.values():
+                self.status.configure(text=f"ปุ่มลัด '{combo}' ถูกใช้ซ้ำ 2 โหมด", fg="#f87171")
+                return False
+            hotkeys[mode] = combo
         try:
             set_env_value(self.app.cfg.root, "GEMINI_API_KEY", self.gemini_var.get())
             set_env_value(self.app.cfg.root, "DISCORD_TOKEN", self.discord_var.get())
+            for mode in MODES:
+                set_config_value(self.app.cfg.root, "hotkeys", mode, hotkeys.get(mode, ""))
+            set_config_value(self.app.cfg.root, "hotkeys", "only_in_apps", ["Discord"] if self.only_discord_var.get() else [])
         except OSError as e:
             self.status.configure(text=f"บันทึกไม่สำเร็จ: {e}", fg="#f87171")
             return False
@@ -130,6 +176,30 @@ class SettingsDialog:
             except (ProviderError, ValueError) as e:
                 text, color = f"ยังใช้ไม่ได้:\n{e}", "#f87171"
             self._ui(lambda: self.status.configure(text=text, fg=color))
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _capture_hotkey(self, mode: str) -> None:
+        """รอให้ผู้ใช้กดปุ่มบนคีย์บอร์ด แล้วใส่ชื่อปุ่มลงช่อง (หยุดปุ่มลัดเดิมชั่วคราวระหว่างรอ)"""
+        self.status.configure(text=f"กดปุ่มที่ต้องการสำหรับ \"{HOTKEY_LABELS[mode]}\" ได้เลย (รอ 10 วินาที)", fg="#c7d2fe")
+        was_paused = getattr(self.app, "paused", False)
+        if hasattr(self.app, "paused"):
+            self.app.paused = True
+
+        def run():
+            combo = ""
+            try:
+                combo = keyboard.read_hotkey(suppress=False)
+            except Exception as e:  # noqa: BLE001
+                self._ui(lambda: self.status.configure(text=f"อ่านปุ่มไม่ได้: {e}", fg="#f87171"))
+            finally:
+                if hasattr(self.app, "paused"):
+                    self.app.paused = was_paused
+            if combo:
+                def apply():
+                    self.hotkey_vars[mode].set(combo)
+                    self.status.configure(text=f"ตั้งเป็น {combo} แล้ว กด \"บันทึก\" เพื่อใช้งาน", fg="#86efac")
+                self._ui(apply)
 
         threading.Thread(target=run, daemon=True).start()
 
