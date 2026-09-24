@@ -52,7 +52,9 @@ class Tray:
         open_settings: Callable[[], None] = lambda: None,
         get_autostart: Callable[[], bool] = lambda: False,
         toggle_autostart: Callable[[], None] = lambda: None,
+        get_hotkeys: Callable[[], str] = lambda: "",
     ):
+        self._get_hotkeys = get_hotkeys
         self._get_status = get_status
         self._get_tone = get_tone
         self._set_tone = set_tone
@@ -90,10 +92,11 @@ class Tray:
                 default=True,
             ),
             pystray.Menu.SEPARATOR,
+            pystray.MenuItem(lambda _i: self._get_hotkeys(), None, enabled=False),
             pystray.MenuItem(lambda _i: self._get_status(), None, enabled=False),
             pystray.MenuItem(lambda _i: self._get_usage(), None, enabled=False),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("ตั้งค่าคีย์และบัญชี...", lambda: self._open_settings()),
+            pystray.MenuItem("ตั้งค่า: คีย์ / ปุ่มลัด / บัญชี...", lambda: self._open_settings()),
             pystray.MenuItem("น้ำเสียงตอนตอบ", pystray.Menu(*[tone_item(t) for t in TONES])),
             pystray.MenuItem(
                 lambda _i: "Discord app: กำลังทำงาน (คลิกเพื่อปิด)" if self._get_discord_running()

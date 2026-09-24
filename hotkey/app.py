@@ -68,6 +68,7 @@ class App:
             open_settings=lambda: self.ui(self._open_settings),
             get_autostart=lambda: self._autostart_state,
             toggle_autostart=lambda: self.ui(self._toggle_autostart),
+            get_hotkeys=self._hotkeys_text,
         )
         self._autostart_state = autostart.is_enabled()
         self.discord_proc: subprocess.Popen | None = None
@@ -89,6 +90,7 @@ class App:
                                              creationflags=creationflags)
         log.info("discord app started pid=%s", self.discord_proc.pid)
         self.toast("เปิด Discord app แล้ว (พร้อมใช้ใน 10 วินาที)")
+        self.tray.refresh()
 
     def _stop_discord(self) -> None:
         if self._discord_running():
@@ -99,6 +101,7 @@ class App:
                 self.discord_proc.kill()
             log.info("discord app stopped")
         self.discord_proc = None
+        self.tray.refresh()
 
     def _toggle_discord(self) -> None:
         if self._discord_running():
@@ -337,6 +340,11 @@ class App:
         except Exception as e:  # noqa: BLE001
             self._show_error(f"โหลดการตั้งค่าไม่ได้: {e}")
         self.tray.refresh()
+
+    def _hotkeys_text(self) -> str:
+        labels = {"read": "แปล", "reply": "ตอบ", "explain": "อธิบาย", "polish": "แก้"}
+        parts = [f"{(self.cfg.hotkey(m) or '-').upper()}={labels[m]}" for m in MODES if self.cfg.hotkey(m)]
+        return "ปุ่มลัด: " + "  ".join(parts) if parts else "ปุ่มลัด: ยังไม่ได้ตั้ง"
 
     def _status_text(self) -> str:
         return f"ผู้ให้บริการ: {' → '.join(self.cfg.provider_order)}"
